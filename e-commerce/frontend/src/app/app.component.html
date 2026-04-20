@@ -1,0 +1,25 @@
+<mat-toolbar color="primary" class="toolbar">
+  <a routerLink="/catalog" class="brand text-decoration-none">E-Commerce</a>
+  <a mat-button routerLink="/catalog">Catálogo</a>
+  @if (auth.currentUser$ | async; as user) {
+    @if (user.role === 'Customer') {
+      <a mat-button routerLink="/cart">Carrinho</a>
+      <a mat-button routerLink="/checkout">Checkout</a>
+      <a mat-button routerLink="/orders">Pedidos</a>
+    }
+    @if (user.role === 'Admin') {
+      <a mat-button routerLink="/admin">Admin</a>
+    }
+    <a mat-button routerLink="/profile">Perfil</a>
+    <span class="spacer"></span>
+    <span>{{ user.name }}</span>
+    <button mat-button type="button" (click)="logout()">Sair</button>
+  } @else {
+    <span class="spacer"></span>
+    <a mat-button routerLink="/login">Entrar</a>
+    <a mat-button routerLink="/register">Cadastrar</a>
+  }
+</mat-toolbar>
+<main>
+  <router-outlet />
+</main>

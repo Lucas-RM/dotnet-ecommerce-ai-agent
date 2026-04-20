@@ -1,0 +1,25 @@
+a.text-decoration-none {
+    text-decoration: none;
+    color: #1eeecb;
+}
+
+.spacer {
+    flex: 1 1 auto;
+}
+
+.toolbar {
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.brand {
+    font-weight: 600;
+    margin-right: 8px;
+}
+
+main {
+    font-family: Lato, sans-serif;    
+    padding: 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+}

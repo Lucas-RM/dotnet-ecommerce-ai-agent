@@ -1,0 +1,72 @@
+# GERAL
+
+# Documentação e artefatos locais do repositório
+documents/
+
+# IDEs e editores
+**/.vs/*
+**/.vscode/*
+.idea/*
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.history/*
+
+# Cursor / regras locais
+.cursorrules
+cursorrules
+
+# Falhas do shell (Git Bash no Windows)
+**/bash.exe.stackdump
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs genéricos na raiz (opcional; descomente se quiser ignorar todos)
+*.log
+
+# FRONTEND (Angular / Node — e-commerce/frontend)
+
+# Dependências, lockfile local e cache do npm / Angular
+**/node_modules/
+**/npm-debug.log
+**/yarn-error.log
+**/dist/
+**/.angular/
+**/.angular/cache
+.sass-cache/
+/connect.lock
+/coverage
+/libpeerconnection.log
+testem.log
+/typings
+e-commerce/frontend/package-lock.json
+
+# BACKEND (.NET — e-commerce/backend)
+
+# Build
+**/bin/
+**/obj/
+**/out/
+**/TestResults/
+**/[Bb]uild[Ll]og.*
+
+# Pacotes NuGet locais (se existirem)
+**/packages/
+!**/packages/build/
+*.nupkg
+*.snupkg
+
+# Arquivos de configuração com segredos (use appsettings.Development.json ou variáveis de ambiente)
+e-commerce/backend/ECommerce.API/appsettings.json
+e-commerce/backend/ECommerce.API/appsettings.Production.json
+
+# Logs da API
+e-commerce/backend/ECommerce.API/logs/
+
+# User-specific do MSBuild
+*.csproj.user
+*.vbproj.user

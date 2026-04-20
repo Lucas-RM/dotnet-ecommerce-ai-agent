@@ -1,0 +1,84 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ECommerce.API", "ECommerce.API\ECommerce.API.csproj", "{6840D0D7-7707-443A-8FE0-5A4FFC1E7DA5}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ECommerce.Application", "ECommerce.Application\ECommerce.Application.csproj", "{F01268BE-C51A-4E7B-85F8-F40296DC8084}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ECommerce.Domain", "ECommerce.Domain\ECommerce.Domain.csproj", "{E4137FC0-ED70-48DC-A0DC-41192871D9DE}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ECommerce.Infrastructure", "ECommerce.Infrastructure\ECommerce.Infrastructure.csproj", "{E147181D-E197-4BF2-8AFC-DDEE8DD21A93}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ECommerce.Tests", "ECommerce.Tests\ECommerce.Tests.csproj", "{CC0B4A78-EAC3-4A96-82C9-66AD01A8ADD5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ECommerce.UI", "ECommerce.UI", "{8665CE16-F946-488E-BF23-5F5E7223E200}"
+EndProject
+Project("{E24C65DC-7377-472B-9ABA-BC803B73C61A}") = "frontend", "..\frontend\", "{55E7D7DB-1E45-446B-9CB9-1E8C57C0F343}"
+	ProjectSection(WebsiteProperties) = preProject
+		TargetFrameworkMoniker = ".NETFramework,Version%3Dv4.8"
+		Debug.AspNetCompiler.VirtualPath = "/localhost_55609"
+		Debug.AspNetCompiler.PhysicalPath = "..\frontend\"
+		Debug.AspNetCompiler.TargetPath = "PrecompiledWeb\localhost_55609\"
+		Debug.AspNetCompiler.Updateable = "true"
+		Debug.AspNetCompiler.ForceOverwrite = "true"
+		Debug.AspNetCompiler.FixedNames = "false"
+		Debug.AspNetCompiler.Debug = "True"
+		Release.AspNetCompiler.VirtualPath = "/localhost_55609"
+		Release.AspNetCompiler.PhysicalPath = "..\frontend\"
+		Release.AspNetCompiler.TargetPath = "PrecompiledWeb\localhost_55609\"
+		Release.AspNetCompiler.Updateable = "true"
+		Release.AspNetCompiler.ForceOverwrite = "true"
+		Release.AspNetCompiler.FixedNames = "false"
+		Release.AspNetCompiler.Debug = "False"
+		VWDPort = "55609"
+		SlnRelativePath = "..\frontend\"
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{D417B968-9D0A-4679-92A3-97862082631C}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6840D0D7-7707-443A-8FE0-5A4FFC1E7DA5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6840D0D7-7707-443A-8FE0-5A4FFC1E7DA5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6840D0D7-7707-443A-8FE0-5A4FFC1E7DA5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6840D0D7-7707-443A-8FE0-5A4FFC1E7DA5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F01268BE-C51A-4E7B-85F8-F40296DC8084}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F01268BE-C51A-4E7B-85F8-F40296DC8084}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F01268BE-C51A-4E7B-85F8-F40296DC8084}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F01268BE-C51A-4E7B-85F8-F40296DC8084}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4137FC0-ED70-48DC-A0DC-41192871D9DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4137FC0-ED70-48DC-A0DC-41192871D9DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4137FC0-ED70-48DC-A0DC-41192871D9DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4137FC0-ED70-48DC-A0DC-41192871D9DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E147181D-E197-4BF2-8AFC-DDEE8DD21A93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E147181D-E197-4BF2-8AFC-DDEE8DD21A93}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E147181D-E197-4BF2-8AFC-DDEE8DD21A93}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E147181D-E197-4BF2-8AFC-DDEE8DD21A93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CC0B4A78-EAC3-4A96-82C9-66AD01A8ADD5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC0B4A78-EAC3-4A96-82C9-66AD01A8ADD5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC0B4A78-EAC3-4A96-82C9-66AD01A8ADD5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC0B4A78-EAC3-4A96-82C9-66AD01A8ADD5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{55E7D7DB-1E45-446B-9CB9-1E8C57C0F343}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55E7D7DB-1E45-446B-9CB9-1E8C57C0F343}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55E7D7DB-1E45-446B-9CB9-1E8C57C0F343}.Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{55E7D7DB-1E45-446B-9CB9-1E8C57C0F343}.Release|Any CPU.Build.0 = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{55E7D7DB-1E45-446B-9CB9-1E8C57C0F343} = {8665CE16-F946-488E-BF23-5F5E7223E200}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F5881862-4D2A-49E5-91D4-390F897C4C5F}
+	EndGlobalSection
+EndGlobal
