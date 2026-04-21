@@ -10,3 +10,11 @@ export interface ChatResponse {
   requiresApproval: boolean;
   pendingToolName: string | null;
 }
+
+/** Mensagem exibida no widget (espelhada em sessionStorage até fechar a aba ou logout). */
+export interface AgentChatMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  requiresApproval?: boolean;
+  pendingToolName?: string | null;
+}

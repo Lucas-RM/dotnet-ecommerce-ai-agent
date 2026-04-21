@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, inject } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,14 +7,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AgentChatService } from './agent-chat.service';
+import { AgentChatMessage } from './agent-chat.models';
+import { ChatReplyHtmlPipe } from './chat-reply-html.pipe';
 import { getApiErrorMessage } from '../../core/utils/api-error-message';
-
-export interface AgentChatMessage {
-  role: 'user' | 'assistant';
-  text: string;
-  requiresApproval?: boolean;
-  pendingToolName?: string | null;
-}
 
 @Component({
   standalone: true,
@@ -26,12 +21,13 @@ export interface AgentChatMessage {
     MatFormFieldModule,
     MatInputModule,
     MatSnackBarModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    ChatReplyHtmlPipe
   ],
   templateUrl: './agent-chat.component.html',
   styleUrls: ['./agent-chat.component.scss']
 })
-export class AgentChatComponent {
+export class AgentChatComponent implements OnInit, AfterViewInit {
   private readonly agentChat = inject(AgentChatService);
   private readonly snack = inject(MatSnackBar);
 
@@ -41,6 +37,14 @@ export class AgentChatComponent {
   draft = '';
   sending = false;
 
+  ngOnInit(): void {
+    this.messages = this.agentChat.loadPersistedMessages();
+  }
+
+  ngAfterViewInit(): void {
+    this.queueScrollBottom();
+  }
+
   send(): void {
     const text = this.draft.trim();
     if (!text || this.sending) {
@@ -48,6 +52,7 @@ export class AgentChatComponent {
     }
 
     this.messages = [...this.messages, { role: 'user', text }];
+    this.persistMessages();
     this.draft = '';
     this.sending = true;
     this.queueScrollBottom();
@@ -63,6 +68,7 @@ export class AgentChatComponent {
             pendingToolName: res.pendingToolName
           }
         ];
+        this.persistMessages();
         this.sending = false;
         this.queueScrollBottom();
       },
@@ -80,6 +86,10 @@ export class AgentChatComponent {
       ev.preventDefault();
       this.send();
     }
+  }
+
+  private persistMessages(): void {
+    this.agentChat.saveMessages(this.messages);
   }
 
   private queueScrollBottom(): void {

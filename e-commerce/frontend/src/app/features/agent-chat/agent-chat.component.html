@@ -4,7 +4,10 @@
 
   <section class="widget" aria-label="Chat com o assistente">
     <header class="widget-header">
-      <span class="widget-title">Chat</span>
+      <div class="widget-header-left">
+        <span class="widget-icon" aria-hidden="true">💬</span>
+        <span class="widget-title">Chat</span>
+      </div>
       @if (sending) {
         <mat-spinner diameter="20" />
       }
@@ -16,9 +19,16 @@
       }
       @for (m of messages; track $index) {
         <div class="bubble-row" [class.user]="m.role === 'user'" [class.assistant]="m.role === 'assistant'">
+          @if (m.role === 'assistant') {
+            <div class="avatar assistant-avatar" aria-hidden="true">A</div>
+          }
           <div class="bubble">
             <span class="bubble-label">{{ m.role === 'user' ? 'Você' : 'Assistente' }}</span>
-            <p class="bubble-text">{{ m.text }}</p>
+            @if (m.role === 'assistant') {
+              <div class="bubble-text bubble-text--rich" [innerHTML]="m.text | chatReplyHtml"></div>
+            } @else {
+              <p class="bubble-text">{{ m.text }}</p>
+            }
             @if (m.role === 'assistant' && m.requiresApproval) {
               <p class="approval-badge">Aguardando sua confirmação</p>
               @if (m.pendingToolName) {
@@ -26,6 +36,9 @@
               }
             }
           </div>
+          @if (m.role === 'user') {
+            <div class="avatar user-avatar" aria-hidden="true">V</div>
+          }
         </div>
       }
     </div>

@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using ECommerce.AgentAPI.Approval;
 using ECommerce.AgentAPI.ECommerceClient;
+using ECommerce.AgentAPI.Formatting;
 using ECommerce.AgentAPI.Kernel;
 using ECommerce.AgentAPI.Models;
 using Microsoft.AspNetCore.Http;
@@ -42,10 +43,24 @@ public sealed class AgentOrchestratorMiddleware
     {
         var sessionKey = request.SessionId.ToString("D");
 
+        ChatProcessResult result;
         if (_toolApproval.HasPending(sessionKey))
-            return Ok(await HandlePendingApprovalAsync(request, sessionKey, cancellationToken).ConfigureAwait(false));
+            result = Ok(await HandlePendingApprovalAsync(request, sessionKey, cancellationToken).ConfigureAwait(false));
+        else
+            result = await InvokeKernelChatAsync(request, sessionKey, cancellationToken).ConfigureAwait(false);
 
-        return await InvokeKernelChatAsync(request, sessionKey, cancellationToken).ConfigureAwait(false);
+        return NormalizeResponse(result);
+    }
+
+    private static ChatProcessResult NormalizeResponse(ChatProcessResult result)
+    {
+        var presented = new ChatResponse
+        {
+            Reply = AssistantReplyFormatter.ToUserFriendly(result.Response.Reply),
+            RequiresApproval = result.Response.RequiresApproval,
+            PendingToolName = result.Response.PendingToolName
+        };
+        return result with { Response = presented };
     }
 
     private static ChatProcessResult Ok(ChatResponse response) =>
@@ -128,8 +143,9 @@ public sealed class AgentOrchestratorMiddleware
                     };
                 }
 
-                AppendTurn(sessionKey, request.Message, toolOutput);
-                return new ChatResponse { Reply = toolOutput, RequiresApproval = false };
+                var friendlyTool = AssistantReplyFormatter.ToUserFriendly(toolOutput);
+                AppendTurn(sessionKey, request.Message, friendlyTool);
+                return new ChatResponse { Reply = friendlyTool, RequiresApproval = false };
         }
     }
 
