@@ -1,8 +1,10 @@
-# E-Commerce — API .NET + Angular
+# E-Commerce — API .NET + Angular + Agent de IA
 
 ## Descrição
 
-Este repositório contém uma solução de e-commerce com **API REST em ASP.NET Core** (`ECommerce.API`), **frontend em Angular** (`ecommerce-web`) e persistência em **SQL Server** via **Entity Framework Core**. A API segue versionamento em URL (`/api/v1/...`), autenticação **JWT** com **refresh token** em cookie HTTP-only, e papéis **Admin** e **Customer**.
+Este repositório contém uma solução de e-commerce com **API REST em ASP.NET Core** (`ECommerce.API`), **frontend em Angular** (`ecommerce-web`), persistência em **SQL Server** via **Entity Framework Core** e um serviço separado **ECommerce.AgentAPI**: um **agente de chat** com **Semantic Kernel**, **OpenAI** (sem Azure) e chamadas à API do e-commerce via **Refit** (JWT do mesmo usuário autenticado).
+
+A API do e-commerce segue versionamento em URL (`/api/v1/...`), autenticação **JWT** com **refresh token** em cookie HTTP-only, e papéis **Admin** e **Customer**.
 
 **Principais funcionalidades (conforme implementação):**
 
@@ -11,8 +13,9 @@ Este repositório contém uma solução de e-commerce com **API REST em ASP.NET 
 - **Carrinho:** consulta, inclusão/atualização/remoção de itens, limpeza (Customer).
 - **Pedidos:** checkout a partir do carrinho, listagem e detalhe dos pedidos do cliente; listagem administrativa de pedidos (Admin).
 - **Usuários:** perfil do usuário autenticado; listagem paginada de usuários (Admin).
+- **Agente de compras (IA):** chat em `/chat` (usuário autenticado) que conversa com o Agent API; o agente usa tools para produtos, carrinho e pedidos, com fluxo de **aprovação** para ações sensíveis (ex.: alterar carrinho).
 
-Em ambiente **Development**, a API executa um **seed** inicial (usuários de exemplo e produtos) e redireciona a raiz `/` para o **Swagger**.
+Em ambiente **Development**, a API do e-commerce executa um **seed** inicial (usuários de exemplo e produtos) e redireciona a raiz `/` para o **Swagger**.
 
 ---
 
@@ -28,9 +31,12 @@ Em ambiente **Development**, a API executa um **seed** inicial (usuários de exe
 | **Angular Material / CDK** | 17.3.x |
 | **TypeScript** | ~5.4.2 |
 | **RxJS** | ~7.8.0 |
+| **Semantic Kernel** | 1.74.x (`ECommerce.AgentAPI`) |
+| **OpenAI** | Via `Microsoft.SemanticKernel.Connectors.OpenAI` (API `api.openai.com`) |
+| **Refit** | Cliente HTTP tipado para a API do e-commerce no Agent |
 | **Node.js** | Não fixado em `package.json`; para Angular 17 costuma-se **Node 18.x ou 20.x LTS** (requisito típico do ecossistema Angular CLI 17). |
 
-**Bibliotecas relevantes (backend):**
+**Bibliotecas relevantes (backend e-commerce):**
 
 - **JWT:** `Microsoft.AspNetCore.Authentication.JwtBearer` 8.0.12  
 - **AutoMapper:** `AutoMapper.Extensions.Microsoft.DependencyInjection` 12.0.1  
@@ -48,6 +54,8 @@ Em ambiente **Development**, a API executa um **seed** inicial (usuários de exe
 
 ```
 dotnet-ecommerce-ai-agent/
+├── documents/
+│   └── PROMPTS/                    # Referência de prompts / especificação do agente (ex.: ecommerce-agent-prompt.yaml)
 ├── e-commerce/
 │   ├── backend/
 │   │   ├── ECommerce.sln
@@ -56,14 +64,19 @@ dotnet-ecommerce-ai-agent/
 │   │   ├── ECommerce.Domain/       # Entidades e enums
 │   │   ├── ECommerce.Infrastructure/  # EF Core (DbContext), repositórios, migrations
 │   │   └── ECommerce.Tests/        # Testes unitários
+│   ├── agent-ai/
+│   │   └── backend/
+│   │       └── ECommerce.AgentAPI/ # Minimal API: chat + SK + plugins + Refit (projeto fora do .sln do e-commerce)
 │   └── frontend/                   # Angular (ecommerce-web)
 │       ├── src/
+│       │   └── app/features/agent-chat/   # Widget de chat (/chat)
 │       ├── angular.json
 │       └── package.json
 └── README.md
 ```
 
-- **Clean Architecture** em camadas: `Domain` → `Application` → `Infrastructure`; `API` compõe a injeção de dependência e expõe os endpoints.
+- **Clean Architecture** no e-commerce em camadas: `Domain` → `Application` → `Infrastructure`; `ECommerce.API` compõe a injeção de dependência e expõe os endpoints.
+- **ECommerce.AgentAPI** é um host independente (porta **5200** em desenvolvimento). Valida o **mesmo JWT** que o e-commerce e encaminha o token nas chamadas Refit à API versionada (`/api/v1/...`).
 
 ---
 
@@ -74,10 +87,11 @@ dotnet-ecommerce-ai-agent/
 - [.NET SDK 8.0](https://dotnet.microsoft.com/download)
 - [SQL Server](https://www.microsoft.com/sql-server) acessível pela connection string
 - Para o frontend: [Node.js](https://nodejs.org/) (recomenda-se LTS compatível com Angular 17) e **npm** (definido em `angular.json` como `packageManager`)
+- Para o Agent: conta/chave **OpenAI** (`OpenAI:ApiKey` em `appsettings`)
 
 ---
 
-### Backend (.NET)
+### Backend — e-commerce (.NET)
 
 1. **Configurar `ConnectionStrings:DefaultConnection`** em `e-commerce/backend/ECommerce.API/appsettings.json` (ou variáveis de ambiente / `appsettings.Development.json`) apontando para sua instância SQL Server e banco desejado (ex.: catálogo `ECommerceDb`).
 
@@ -125,6 +139,30 @@ dotnet-ecommerce-ai-agent/
 
 ---
 
+### Backend — Agent de IA (`ECommerce.AgentAPI`)
+
+1. **Configurar** `e-commerce/agent-ai/backend/ECommerce.AgentAPI/appsettings.json` (ou `appsettings.Development.json`):
+
+   - **`OpenAI`:** `ApiKey`, `Model` (ex.: `gpt-4o`).
+   - **`Jwt`:** `Issuer`, `Audience` e `SecretKey` **idênticos** aos do `ECommerce.API` (o frontend envia o mesmo Bearer).
+   - **`ECommerceApi:BaseUrl`:** URL base da API versionada do e-commerce (ex.: `https://localhost:7026/api/v1` quando a API usa HTTPS local).
+   - **`Cors:AllowedOrigins`:** deve incluir a origem do Angular (ex.: `http://localhost:4200`).
+
+2. **Ordem de execução:** suba primeiro a **ECommerce.API** (e o SQL Server), depois o Agent — o Refit precisa alcançar o e-commerce.
+
+3. **Executar o Agent:**
+
+   ```bash
+   cd e-commerce/agent-ai/backend/ECommerce.AgentAPI
+   dotnet run
+   ```
+
+   URL padrão (conforme `launchSettings.json`): **`http://localhost:5200`**.
+
+4. **Endpoint principal:** `POST /api/agent/chat` — corpo JSON `sessionId` (GUID) e `message`. Resposta: `reply`, `requiresApproval`, `pendingToolName`. Requer header **`Authorization: Bearer`** (o Angular repassa o token via interceptor para URLs que começam com `agentApiUrl`).
+
+---
+
 ### Frontend (Angular)
 
 ```bash
@@ -133,15 +171,24 @@ npm install
 npm start
 ```
 
-Por padrão o dev server do Angular usa a porta **4200**. A URL base da API está em `src/environments/environment.ts` e `environment.production.ts`:
+Por padrão o dev server do Angular usa a porta **4200**.
 
-- `apiUrl: 'https://localhost:7026/api/v1'`
+**Ambientes** (`src/environments/`):
 
-Ajuste se a API rodar em outro host/porta. O CORS da API em **Development** permite origens como `http://localhost:4200` e `https://localhost:4200` (e as URLs da própria API), conforme `DependencyInjectionExtensions.cs`.
+| Arquivo | `apiUrl` (e-commerce) | `agentApiUrl` (Agent) |
+|---------|------------------------|------------------------|
+| `environment.ts` (development) | `http://localhost:5149/api/v1` | `http://localhost:5200` |
+| `environment.production.ts` | `https://localhost:7026/api/v1` | `https://localhost:5200` |
+
+Ajuste portas e protocolos se necessário. O **CORS** da API do e-commerce em **Development** permite origens como `http://localhost:4200` e `https://localhost:4200` (e as URLs da própria API), conforme `DependencyInjectionExtensions.cs`. O Agent tem lista própria em `Cors:AllowedOrigins`.
+
+**Rotas relevantes:**
+
+- **`/chat`** — widget de chat com o agente (protegida por `authGuard`; requer login). O `AgentChatService` mantém um `sessionId` por sessão do browser e chama `resetSession()` no logout para não reutilizar o histórico do servidor após sair.
 
 ---
 
-## Formato de resposta da API
+## Formato de resposta da API (e-commerce)
 
 As respostas usam o envelope `ApiResponse<T>`:
 

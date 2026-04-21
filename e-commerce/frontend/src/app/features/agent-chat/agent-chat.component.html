@@ -1,0 +1,50 @@
+<div class="chat-page">
+  <h1 class="title">Assistente de compras</h1>
+  <p class="subtitle">Pergunte sobre produtos, carrinho e pedidos. Respostas com base nos dados da loja.</p>
+
+  <section class="widget" aria-label="Chat com o assistente">
+    <header class="widget-header">
+      <span class="widget-title">Chat</span>
+      @if (sending) {
+        <mat-spinner diameter="20" />
+      }
+    </header>
+
+    <div class="messages" #scrollArea role="log" aria-live="polite">
+      @if (messages.length === 0) {
+        <p class="empty-hint">Envie uma mensagem para começar.</p>
+      }
+      @for (m of messages; track $index) {
+        <div class="bubble-row" [class.user]="m.role === 'user'" [class.assistant]="m.role === 'assistant'">
+          <div class="bubble">
+            <span class="bubble-label">{{ m.role === 'user' ? 'Você' : 'Assistente' }}</span>
+            <p class="bubble-text">{{ m.text }}</p>
+            @if (m.role === 'assistant' && m.requiresApproval) {
+              <p class="approval-badge">Aguardando sua confirmação</p>
+              @if (m.pendingToolName) {
+                <span class="tool-hint">{{ m.pendingToolName }}</span>
+              }
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <footer class="composer">
+      <mat-form-field class="field" appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Sua mensagem</mat-label>
+        <textarea
+          matInput
+          rows="2"
+          [(ngModel)]="draft"
+          (keydown)="onKeydown($event)"
+          [disabled]="sending"
+          placeholder="Ex.: O que tem no meu carrinho?"
+        ></textarea>
+      </mat-form-field>
+      <button mat-flat-button color="primary" type="button" (click)="send()" [disabled]="sending || !draft.trim()">
+        Enviar
+      </button>
+    </footer>
+  </section>
+</div>

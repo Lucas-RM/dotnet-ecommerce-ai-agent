@@ -1,7 +1,8 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, Injector, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, catchError, finalize, map, of, shareReplay, switchMap, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { AgentChatService } from '../../features/agent-chat/agent-chat.service';
 import { ApiResponse, AuthResponseDto, LoginDto, RegisterDto, User, UserDto } from '../models/auth.models';
 
 const ACCESS_TOKEN_STORAGE_KEY = 'ecommerce.accessToken';
@@ -13,6 +14,7 @@ const ACCESS_TOKEN_STORAGE_KEY = 'ecommerce.accessToken';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly injector = inject(Injector);
   private readonly currentUserSubject = new BehaviorSubject<User | null>(null);
   private accessToken: string | null = null;
   private refreshInFlight$: Observable<string> | null = null;
@@ -94,6 +96,7 @@ export class AuthService {
       this.revoke().subscribe({ error: () => undefined });
     }
     this.clearLocalSession();
+    this.injector.get(AgentChatService).resetSession();
   }
 
   /** Limpa memória (e estado de usuário) sem chamar API; usado após falha de refresh. */

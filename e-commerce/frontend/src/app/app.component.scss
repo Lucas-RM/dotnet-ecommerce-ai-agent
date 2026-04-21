@@ -17,6 +17,22 @@ a.text-decoration-none {
     margin-right: 8px;
 }
 
+/* Fundo rosa sobre a toolbar primary. */
+a.chat-ia-button.mat-mdc-button {
+    background-color: #c93466 !important;
+    color: #fff !important;
+
+    &:hover {
+        background-color: #c21655 !important;
+        color: #fff !important;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #fce4ec;
+        outline-offset: 2px;
+    }
+}
+
 main {
     font-family: Lato, sans-serif;    
     padding: 16px;

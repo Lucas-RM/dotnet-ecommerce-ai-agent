@@ -45,7 +45,7 @@ testem.log
 /typings
 e-commerce/frontend/package-lock.json
 
-# BACKEND (.NET — e-commerce/backend)
+# BACKEND
 
 # Build
 **/bin/
@@ -61,11 +61,11 @@ e-commerce/frontend/package-lock.json
 *.snupkg
 
 # Arquivos de configuração com segredos (use appsettings.Development.json ou variáveis de ambiente)
-e-commerce/backend/ECommerce.API/appsettings.json
-e-commerce/backend/ECommerce.API/appsettings.Production.json
+**/appsettings.json
+**/appsettings.Production.json
 
 # Logs da API
-e-commerce/backend/ECommerce.API/logs/
+**/logs/
 
 # User-specific do MSBuild
 *.csproj.user

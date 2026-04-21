@@ -3,6 +3,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 type ApiErrorBody = {
   message?: string;
   Message?: string;
+  /** Resposta do Agent quando o POST falha com corpo `ChatResponse`. */
+  reply?: string;
   errors?: string[] | Record<string, string[]>;
 };
 
@@ -35,7 +37,7 @@ export function getApiErrorMessage(err: unknown, fallback = 'Não foi possível 
 
     if (body && typeof body === 'object' && !Array.isArray(body)) {
       const b = body as ApiErrorBody;
-      const primary = (b.message ?? b.Message)?.trim();
+      const primary = (b.message ?? b.Message ?? b.reply)?.trim();
       const extra = joinErrors(b.errors);
       if (primary && extra) return `${primary} ${extra}`.trim();
       if (primary) return primary;
@@ -47,7 +49,7 @@ export function getApiErrorMessage(err: unknown, fallback = 'Não foi possível 
       if (t.startsWith('{')) {
         try {
           const p = JSON.parse(t) as ApiErrorBody;
-          const primary = (p.message ?? p.Message)?.trim();
+          const primary = (p.message ?? p.Message ?? p.reply)?.trim();
           const extra = joinErrors(p.errors);
           if (primary && extra) return `${primary} ${extra}`.trim();
           if (primary) return primary;
