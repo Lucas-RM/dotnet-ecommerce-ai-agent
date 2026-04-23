@@ -47,7 +47,9 @@
 .widget-header-left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+  row-gap: 6px;
 }
 
 .widget-icon {
@@ -59,6 +61,32 @@
   font-weight: 600;
   font-size: 1.05rem;
   color: #1565c0;
+}
+
+.llm-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  vertical-align: middle;
+}
+
+.llm-pill--openai {
+  color: #0d47a1;
+  background: rgba(25, 118, 210, 0.1);
+  border-color: rgba(25, 118, 210, 0.28);
+}
+
+.llm-pill--ollama {
+  color: #b71c1c;
+  background: rgba(198, 40, 40, 0.1);
+  border-color: rgba(198, 40, 40, 0.3);
 }
 
 .messages {
@@ -180,25 +208,6 @@
     content: '';
     margin-top: 0.35em;
   }
-}
-
-.approval-badge {
-  margin: 10px 0 0;
-  padding: 6px 10px;
-  font-size: 0.78rem;
-  color: #bf360c;
-  font-weight: 600;
-  background: rgba(255, 112, 67, 0.1);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 112, 67, 0.25);
-}
-
-.tool-hint {
-  display: inline-block;
-  margin-top: 6px;
-  font-size: 0.68rem;
-  font-family: 'Consolas', 'Segoe UI Mono', ui-monospace, monospace;
-  color: rgba(0, 0, 0, 0.42);
 }
 
 .composer {

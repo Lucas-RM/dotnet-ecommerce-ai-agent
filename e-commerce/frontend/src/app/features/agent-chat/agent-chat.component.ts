@@ -2,14 +2,18 @@ import { AfterViewInit, Component, ElementRef, OnInit, ViewChild, inject } from 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AgentChatService } from './agent-chat.service';
-import { AgentChatMessage } from './agent-chat.models';
+import { AgentChatMessage, ChatResponse } from './agent-chat.models';
 import { ChatReplyHtmlPipe } from './chat-reply-html.pipe';
+import { ApprovalDialogComponent } from './approval-dialog.component';
 import { getApiErrorMessage } from '../../core/utils/api-error-message';
+
+type LlmProviderLabel = 'openai' | 'ollama';
 
 @Component({
   standalone: true,
@@ -30,12 +34,17 @@ import { getApiErrorMessage } from '../../core/utils/api-error-message';
 export class AgentChatComponent implements OnInit, AfterViewInit {
   private readonly agentChat = inject(AgentChatService);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
 
   @ViewChild('scrollArea') private readonly scrollArea?: ElementRef<HTMLElement>;
 
   messages: AgentChatMessage[] = [];
   draft = '';
   sending = false;
+  /** Bloqueia o compositor enquanto o modal de aprovação estiver aberto. */
+  approvalOpen = false;
+  /** Provedor LLM da última resposta do Agent (cabeçalho do widget). */
+  activeLlmProvider: LlmProviderLabel | null = null;
 
   ngOnInit(): void {
     this.messages = this.agentChat.loadPersistedMessages();
@@ -47,31 +56,27 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
 
   send(): void {
     const text = this.draft.trim();
-    if (!text || this.sending) {
+    if (!text || this.sending || this.approvalOpen) {
       return;
     }
+    this.draft = '';
+    this.appendUserAndPostMessage(text);
+  }
 
+  onKeydown(ev: KeyboardEvent): void {
+    if (ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault();
+      this.send();
+    }
+  }
+
+  private appendUserAndPostMessage(text: string): void {
     this.messages = [...this.messages, { role: 'user', text }];
     this.persistMessages();
-    this.draft = '';
     this.sending = true;
     this.queueScrollBottom();
-
     this.agentChat.sendMessage(text).subscribe({
-      next: (res) => {
-        this.messages = [
-          ...this.messages,
-          {
-            role: 'assistant',
-            text: res.reply,
-            requiresApproval: res.requiresApproval,
-            pendingToolName: res.pendingToolName
-          }
-        ];
-        this.persistMessages();
-        this.sending = false;
-        this.queueScrollBottom();
-      },
+      next: (res) => this.onResponse(res),
       error: (err: unknown) => {
         this.sending = false;
         this.snack.open(getApiErrorMessage(err, 'Não foi possível enviar a mensagem.'), 'Fechar', {
@@ -81,11 +86,49 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
     });
   }
 
-  onKeydown(ev: KeyboardEvent): void {
-    if (ev.key === 'Enter' && !ev.shiftKey) {
-      ev.preventDefault();
-      this.send();
+  private onResponse(res: ChatResponse): void {
+    this.updateLlmProviderFrom(res);
+    this.messages = [
+      ...this.messages,
+      {
+        role: 'assistant',
+        text: res.reply,
+        requiresApproval: res.requiresApproval,
+        pendingToolName: res.pendingToolName
+      }
+    ];
+    this.persistMessages();
+    this.sending = false;
+    this.queueScrollBottom();
+
+    if (res.requiresApproval) {
+      this.openApprovalAndFollowUp(res);
     }
+  }
+
+  private updateLlmProviderFrom(res: ChatResponse): void {
+    const p = (res.llmProvider ?? '').toLowerCase();
+    if (p === 'ollama') {
+      this.activeLlmProvider = 'ollama';
+    } else if (p === 'openai' || p === 'azure' || p === 'azureopenai') {
+      this.activeLlmProvider = 'openai';
+    }
+  }
+
+  private openApprovalAndFollowUp(res: ChatResponse): void {
+    this.approvalOpen = true;
+    const dref = this.dialog.open(ApprovalDialogComponent, {
+      data: { approvalMessage: res.reply, pendingToolName: res.pendingToolName },
+      disableClose: false
+    });
+    dref.afterClosed().subscribe((confirmed) => {
+      this.approvalOpen = false;
+      if (confirmed === true) {
+        this.appendUserAndPostMessage('sim');
+        return;
+      }
+      this.appendUserAndPostMessage('não');
+    });
   }
 
   private persistMessages(): void {

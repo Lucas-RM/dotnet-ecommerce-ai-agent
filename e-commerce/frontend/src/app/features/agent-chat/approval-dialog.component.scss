@@ -1,0 +1,47 @@
+.title {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1565c0;
+}
+
+.body-text {
+  margin: 0;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.87);
+  min-width: min(92vw, 420px);
+
+  ::ng-deep strong {
+    font-weight: 600;
+    color: #0d47a1;
+  }
+
+  ::ng-deep code {
+    font-family: 'Consolas', 'Segoe UI Mono', ui-monospace, monospace;
+    font-size: 0.85em;
+    padding: 0.12em 0.35em;
+    border-radius: 4px;
+    background: rgba(25, 118, 210, 0.08);
+    color: #1565c0;
+  }
+}
+
+.tool-pill {
+  margin: 14px 0 0;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  color: #bf360c;
+  font-weight: 600;
+  background: rgba(255, 112, 67, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 112, 67, 0.25);
+}
+
+code {
+  font-weight: 500;
+}
+
+.actions {
+  padding: 8px 0 0;
+  gap: 8px;
+}

@@ -7,6 +7,16 @@
       <div class="widget-header-left">
         <span class="widget-icon" aria-hidden="true">💬</span>
         <span class="widget-title">Chat</span>
+        @if (activeLlmProvider) {
+          <span
+            class="llm-pill"
+            [class.llm-pill--ollama]="activeLlmProvider === 'ollama'"
+            [class.llm-pill--openai]="activeLlmProvider === 'openai'"
+            [attr.aria-label]="'Provedor LLM: ' + (activeLlmProvider === 'ollama' ? 'Ollama' : 'OpenAI')"
+          >
+            {{ activeLlmProvider === 'ollama' ? 'Ollama' : 'OpenAI' }}
+          </span>
+        }
       </div>
       @if (sending) {
         <mat-spinner diameter="20" />
@@ -29,12 +39,6 @@
             } @else {
               <p class="bubble-text">{{ m.text }}</p>
             }
-            @if (m.role === 'assistant' && m.requiresApproval) {
-              <p class="approval-badge">Aguardando sua confirmação</p>
-              @if (m.pendingToolName) {
-                <span class="tool-hint">{{ m.pendingToolName }}</span>
-              }
-            }
           </div>
           @if (m.role === 'user') {
             <div class="avatar user-avatar" aria-hidden="true">V</div>
@@ -51,11 +55,17 @@
           rows="2"
           [(ngModel)]="draft"
           (keydown)="onKeydown($event)"
-          [disabled]="sending"
+          [disabled]="sending || approvalOpen"
           placeholder="Ex.: O que tem no meu carrinho?"
         ></textarea>
       </mat-form-field>
-      <button mat-flat-button color="primary" type="button" (click)="send()" [disabled]="sending || !draft.trim()">
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        (click)="send()"
+        [disabled]="sending || approvalOpen || !draft.trim()"
+      >
         Enviar
       </button>
     </footer>

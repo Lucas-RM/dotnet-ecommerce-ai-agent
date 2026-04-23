@@ -1,0 +1,11 @@
+<h2 class="title" mat-dialog-title>Confirmação do assistente</h2>
+<mat-dialog-content>
+  <div class="message body-text" [innerHTML]="data.approvalMessage | chatReplyHtml"></div>
+  @if (data.pendingToolName) {
+    <p class="tool-pill" aria-label="Ação sujeita a aprovação">Ação: <code>{{ data.pendingToolName }}</code></p>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end" class="actions">
+  <button mat-stroked-button type="button" (click)="cancel()">Cancelar</button>
+  <button mat-flat-button color="primary" type="button" (click)="confirm()">Confirmar</button>
+</mat-dialog-actions>

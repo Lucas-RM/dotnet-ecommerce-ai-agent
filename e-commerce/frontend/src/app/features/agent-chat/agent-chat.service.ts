@@ -10,7 +10,7 @@ const MESSAGES_STORAGE_KEY = 'ecommerce.agentChat.messages';
 @Injectable({ providedIn: 'root' })
 export class AgentChatService {
   private readonly http = inject(HttpClient);
-  private readonly chatUrl = `${environment.agentApiUrl}/api/agent/chat`;
+  private readonly agentUrl = `${environment.agentApiUrl}/api/agent/chat`;
 
   /** Mesmo GUID após F5 (sessionStorage); `resetSession` no logout ou nova conversa. */
   private sessionId = this.loadOrCreateSessionId();
@@ -20,7 +20,7 @@ export class AgentChatService {
       sessionId: this.sessionId,
       message
     };
-    return this.http.post<ChatResponse>(this.chatUrl, body);
+    return this.http.post<ChatResponse>(this.agentUrl, body);
   }
 
   /** Mensagens persistidas na aba atual (sessionStorage). */

@@ -9,6 +9,8 @@ export interface ChatResponse {
   reply: string;
   requiresApproval: boolean;
   pendingToolName: string | null;
+  /** Provedor ativo no Agent (`openai` | `ollama`), quando o backend expõe. */
+  llmProvider?: string | null;
 }
 
 /** Mensagem exibida no widget (espelhada em sessionStorage até fechar a aba ou logout). */
