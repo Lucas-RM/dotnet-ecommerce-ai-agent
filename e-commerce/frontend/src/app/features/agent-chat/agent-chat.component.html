@@ -10,11 +10,11 @@
         @if (activeLlmProvider) {
           <span
             class="llm-pill"
-            [class.llm-pill--ollama]="activeLlmProvider === 'ollama'"
+            [class.llm-pill--google]="activeLlmProvider === 'google'"
             [class.llm-pill--openai]="activeLlmProvider === 'openai'"
-            [attr.aria-label]="'Provedor LLM: ' + (activeLlmProvider === 'ollama' ? 'Ollama' : 'OpenAI')"
+            [attr.aria-label]="'Provedor LLM: ' + (activeLlmProvider === 'google' ? 'Google' : 'OpenAI')"
           >
-            {{ activeLlmProvider === 'ollama' ? 'Ollama' : 'OpenAI' }}
+            {{ activeLlmProvider === 'google' ? 'Google' : 'OpenAI' }}
           </span>
         }
       </div>

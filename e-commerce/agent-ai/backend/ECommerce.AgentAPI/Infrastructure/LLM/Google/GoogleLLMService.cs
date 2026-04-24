@@ -2,8 +2,8 @@ using ECommerce.AgentAPI.Domain.Entities;
 using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
+using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Approval;
-using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Google;
@@ -22,17 +22,20 @@ public sealed class GoogleLLMService : ILLMService
     private const int DefaultMaxOutputTokens = 1024;
 
     private readonly GoogleKernelFactory _kernelFactory;
+    private readonly IECommerceApi _eCommerceApi;
     private readonly ToolApprovalService _toolApproval;
     private readonly IConfiguration _configuration;
     private readonly ILogger<GoogleLLMService> _logger;
 
     public GoogleLLMService(
         GoogleKernelFactory kernelFactory,
+        IECommerceApi eCommerceApi,
         ToolApprovalService toolApproval,
         IConfiguration configuration,
         ILogger<GoogleLLMService> logger)
     {
         _kernelFactory = kernelFactory;
+        _eCommerceApi = eCommerceApi;
         _toolApproval = toolApproval;
         _configuration = configuration;
         _logger = logger;
@@ -52,7 +55,7 @@ public sealed class GoogleLLMService : ILLMService
 
         var key = request.SessionId;
         var history = ToSkChatHistory(request);
-        var kernel = _kernelFactory.CreateKernel(request.SessionId);
+        var kernel = _kernelFactory.CreateKernel(_eCommerceApi, request.SessionId);
         var chat = kernel.GetRequiredService<IChatCompletionService>();
         var settings = CreatePromptExecutionSettings(request);
 

@@ -13,7 +13,7 @@ import { ChatReplyHtmlPipe } from './chat-reply-html.pipe';
 import { ApprovalDialogComponent } from './approval-dialog.component';
 import { getApiErrorMessage } from '../../core/utils/api-error-message';
 
-type LlmProviderLabel = 'openai' | 'ollama';
+type LlmProviderLabel = 'openai' | 'google';
 
 @Component({
   standalone: true,
@@ -108,8 +108,8 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
 
   private updateLlmProviderFrom(res: ChatResponse): void {
     const p = (res.llmProvider ?? '').toLowerCase();
-    if (p === 'ollama') {
-      this.activeLlmProvider = 'ollama';
+    if (p === 'google' || p === 'gemini') {
+      this.activeLlmProvider = 'google';
     } else if (p === 'openai' || p === 'azure' || p === 'azureopenai') {
       this.activeLlmProvider = 'openai';
     }

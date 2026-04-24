@@ -1,9 +1,8 @@
 namespace ECommerce.AgentAPI.Domain.Enums;
 
-/// <summary>Provedor LLM configurável (<c>LLM:Provider</c> em appsettings). Camada de domínio — sem referências a SK/Ollama.</summary>
+/// <summary>Provedor LLM configurável (<c>LLM:Provider</c> em appsettings). Camada de domínio — sem referências a SK.</summary>
 public enum LLMProvider
 {
     OpenAI = 0,
-    Ollama = 1,
     Google = 2
 }

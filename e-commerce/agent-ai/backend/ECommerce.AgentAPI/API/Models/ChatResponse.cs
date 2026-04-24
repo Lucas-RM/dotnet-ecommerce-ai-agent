@@ -14,7 +14,7 @@ public sealed class ChatResponse
     [JsonPropertyName("pendingToolName")]
     public string? PendingToolName { get; set; }
 
-    /// <summary>Provedor LLM ativo (appsettings <c>LLM:Provider</c>), p.ex. <c>openai</c> ou <c>ollama</c>.</summary>
+    /// <summary>Provedor LLM ativo (appsettings <c>LLM:Provider</c>), p.ex. <c>openai</c> ou <c>google</c>.</summary>
     [JsonPropertyName("llmProvider")]
     public string? LlmProvider { get; set; }
 }

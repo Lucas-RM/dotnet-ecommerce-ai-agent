@@ -67,9 +67,10 @@ public sealed class AgentOrchestratorMiddleware
         }
 
         var raw = (_configuration["LLM:Provider"] ?? "OpenAI").Trim();
-        if (string.Equals(raw, "Ollama", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(raw, "Google", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(raw, "Gemini", StringComparison.OrdinalIgnoreCase))
         {
-            response.LlmProvider = "ollama";
+            response.LlmProvider = "google";
         }
         else
         {

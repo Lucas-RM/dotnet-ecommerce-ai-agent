@@ -13,7 +13,6 @@ using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.ErrorHandling;
 using ECommerce.AgentAPI.Infrastructure.LLM;
 using ECommerce.AgentAPI.Infrastructure.LLM.Google;
-using ECommerce.AgentAPI.Infrastructure.LLM.Ollama;
 using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 using ECommerce.AgentAPI.Infrastructure.Memory;
 using ECommerce.AgentAPI.Infrastructure.Tools;
@@ -47,15 +46,12 @@ public static class AgentApiDependencyInjection
         services.AddScoped<ProductPlugin>();
         services.AddScoped<CartPlugin>();
         services.AddScoped<OrderPlugin>();
-        services.AddScoped<ApprovalFilter>();
 
         // ── Refit + Polly + JWT no outbound (antes dos serviços que dependem de IECommerceApi) ──
         services.AddECommerceApi(configuration);
 
-        // ── LLM Layer (Singleton — Ollama usa IHttpClientFactory; OpenAILLMService reutiliza um IECommerceApi/HttpClient) ──
+        // ── LLM Layer (Singleton — OpenAILLMService reutiliza um IECommerceApi/HttpClient) ──
         services.AddSingleton<OpenAILLMService>();
-        services.AddSingleton<OllamaKernelFactory>();
-        services.AddSingleton<OllamaLLMService>();
         services.AddSingleton<GoogleKernelFactory>();
         services.AddSingleton<GoogleLLMService>();
         services.AddSingleton<ILLMFactory, LLMFactory>();

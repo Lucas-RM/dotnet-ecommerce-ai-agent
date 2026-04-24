@@ -9,7 +9,7 @@ export interface ChatResponse {
   reply: string;
   requiresApproval: boolean;
   pendingToolName: string | null;
-  /** Provedor ativo no Agent (`openai` | `ollama`), quando o backend expõe. */
+  /** Provedor ativo no Agent (`openai` | `google`), quando o backend expõe. */
   llmProvider?: string | null;
 }
 

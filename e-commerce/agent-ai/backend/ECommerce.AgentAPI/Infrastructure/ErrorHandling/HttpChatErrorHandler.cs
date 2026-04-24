@@ -32,8 +32,6 @@ public sealed class HttpChatErrorHandler : IChatErrorHandler
                 or IOException
                 or TimeoutException _ => (StatusCodes.Status503ServiceUnavailable,
                 "Problema de ligação de rede. Tente de novo em instantes."),
-            KernelException kex when LooksLikeOllamaConnectorIssue(kex) => (StatusCodes.Status503ServiceUnavailable,
-                "Não foi possível concluir a chamada ao Ollama. Verifique se o Ollama está ativo, se o modelo está instalado e se LLM:Ollama:BaseUrl/Model estão corretos."),
             KernelException => (StatusCodes.Status503ServiceUnavailable,
                 "Falha no motor de conversação (Semantic Kernel). Verifique o modelo, ferramentas suportadas e a configuração em LLM. Os detalhes técnicos foram registados nos logs do servidor."),
             _ => UnmappedError(exception)
@@ -211,22 +209,4 @@ public sealed class HttpChatErrorHandler : IChatErrorHandler
         return false;
     }
 
-    private static bool LooksLikeOllamaConnectorIssue(Exception exception)
-    {
-        for (var it = exception; it is not null; it = it.InnerException)
-        {
-            var msg = it.Message ?? string.Empty;
-            if (msg.Contains("ollama", StringComparison.OrdinalIgnoreCase)
-                || msg.Contains("11434", StringComparison.OrdinalIgnoreCase)
-                || msg.Contains("connection refused", StringComparison.OrdinalIgnoreCase)
-                || msg.Contains("actively refused", StringComparison.OrdinalIgnoreCase)
-                || msg.Contains("function", StringComparison.OrdinalIgnoreCase)
-                || msg.Contains("tool", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }
