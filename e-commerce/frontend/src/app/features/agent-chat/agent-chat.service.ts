@@ -93,9 +93,17 @@ function isPersistedAgentChatMessage(x: unknown): x is AgentChatMessage {
   }
   const o = x as Record<string, unknown>;
   const role = o['role'];
-  const text = o['text'];
   if (role !== 'user' && role !== 'assistant') {
     return false;
   }
-  return typeof text === 'string';
+  // Usuário: sempre texto cru (entrada do compositor).
+  // Assistente: novo contrato (intro/outro/card). `text` segue aceito apenas para
+  // desserializar mensagens antigas persistidas antes da migração.
+  if (role === 'user') {
+    return typeof o['text'] === 'string';
+  }
+  return typeof o['introMessage'] === 'string'
+    || typeof o['outroMessage'] === 'string'
+    || o['data'] !== undefined
+    || typeof o['text'] === 'string';
 }

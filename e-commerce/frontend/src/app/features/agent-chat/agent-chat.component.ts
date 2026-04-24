@@ -11,6 +11,7 @@ import { AgentChatService } from './agent-chat.service';
 import { AgentChatMessage, ChatResponse } from './agent-chat.models';
 import { ChatReplyHtmlPipe } from './chat-reply-html.pipe';
 import { ApprovalDialogComponent } from './approval-dialog.component';
+import { ChatDataCardComponent } from './cards';
 import { getApiErrorMessage } from '../../core/utils/api-error-message';
 
 type LlmProviderLabel = 'openai' | 'google';
@@ -26,7 +27,8 @@ type LlmProviderLabel = 'openai' | 'google';
     MatInputModule,
     MatSnackBarModule,
     MatProgressSpinnerModule,
-    ChatReplyHtmlPipe
+    ChatReplyHtmlPipe,
+    ChatDataCardComponent
   ],
   templateUrl: './agent-chat.component.html',
   styleUrls: ['./agent-chat.component.scss']
@@ -92,7 +94,10 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
       ...this.messages,
       {
         role: 'assistant',
-        text: res.reply,
+        introMessage: res.introMessage,
+        outroMessage: res.outroMessage,
+        tool: res.tool,
+        data: res.data,
         requiresApproval: res.requiresApproval,
         pendingToolName: res.pendingToolName
       }
@@ -118,7 +123,10 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
   private openApprovalAndFollowUp(res: ChatResponse): void {
     this.approvalOpen = true;
     const dref = this.dialog.open(ApprovalDialogComponent, {
-      data: { approvalMessage: res.reply, pendingToolName: res.pendingToolName },
+      data: {
+        approvalMessage: res.introMessage ?? '',
+        pendingToolName: res.pendingToolName
+      },
       disableClose: false
     });
     dref.afterClosed().subscribe((confirmed) => {

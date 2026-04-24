@@ -36,7 +36,7 @@ public sealed class HttpChatErrorHandler : IChatErrorHandler
                 "Falha no motor de conversação (Semantic Kernel). Verifique o modelo, ferramentas suportadas e a configuração em LLM. Os detalhes técnicos foram registados nos logs do servidor."),
             _ => UnmappedError(exception)
         };
-        return new ChatProcessResult(sc, new ChatResponse { Reply = reply, RequiresApproval = false });
+        return new ChatProcessResult(sc, new ChatResponse { IntroMessage = reply, RequiresApproval = false });
     }
 
     private (int StatusCode, string Reply) UnmappedError(Exception original)

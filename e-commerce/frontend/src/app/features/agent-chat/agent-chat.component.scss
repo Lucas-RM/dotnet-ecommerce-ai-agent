@@ -151,6 +151,25 @@
   padding: 12px 16px;
   border-radius: 14px;
   line-height: 1.5;
+
+  // Espaçamento entre os 3 blocos da bubble do assistente (intro → card → outro).
+  // O seletor funciona tanto para `.bubble-text + app-chat-data-card` quanto
+  // para `app-chat-data-card + .bubble-text--outro` sem precisar listá-los um a um.
+  > .bubble-text + .bubble-card,
+  > .bubble-card + .bubble-text,
+  > .bubble-text + .bubble-text {
+    margin-top: 8px;
+  }
+}
+
+.bubble-card {
+  display: block;
+}
+
+// Quando a bubble do assistente traz um card estruturado, precisamos de mais
+// espaço horizontal para tabelas (produtos/pedidos/carrinho) respirarem.
+.assistant .bubble:has(.bubble-card) {
+  max-width: min(95%, 640px);
 }
 
 .user .bubble {

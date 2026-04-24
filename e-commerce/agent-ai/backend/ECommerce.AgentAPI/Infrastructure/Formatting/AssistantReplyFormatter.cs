@@ -6,7 +6,10 @@ using System.Text.RegularExpressions;
 namespace ECommerce.AgentAPI.Infrastructure.Formatting;
 
 /// <summary>
-/// Converte respostas que venham como JSON (tools ou modelo colando JSON) em texto legível em português.
+/// Rede de segurança aplicada <b>apenas</b> no caminho "LLM sem tool" de <c>ProcessUserMessageUseCase</c>.
+/// Se o modelo (apesar do prompt) colar JSON bruto no texto da resposta, converte-o em português legível.
+/// O caminho de tool já não passa por aqui: a apresentação é controlada por <c>IToolEnvelopeBuilder</c> +
+/// <c>data</c> estruturado no <c>ChatResponse</c>.
 /// </summary>
 public static class AssistantReplyFormatter
 {

@@ -34,10 +34,28 @@
           }
           <div class="bubble">
             <span class="bubble-label">{{ m.role === 'user' ? 'Você' : 'Assistente' }}</span>
-            @if (m.role === 'assistant') {
-              <div class="bubble-text bubble-text--rich" [innerHTML]="m.text | chatReplyHtml"></div>
-            } @else {
+            @if (m.role === 'user') {
               <p class="bubble-text">{{ m.text }}</p>
+            } @else {
+              @if (m.introMessage) {
+                <div
+                  class="bubble-text bubble-text--rich"
+                  [innerHTML]="m.introMessage | chatReplyHtml"
+                ></div>
+              }
+              @if (m.tool?.dataType && m.data) {
+                <app-chat-data-card
+                  class="bubble-card"
+                  [dataType]="m.tool!.dataType!"
+                  [data]="m.data"
+                />
+              }
+              @if (m.outroMessage) {
+                <div
+                  class="bubble-text bubble-text--rich bubble-text--outro"
+                  [innerHTML]="m.outroMessage | chatReplyHtml"
+                ></div>
+              }
             }
           </div>
           @if (m.role === 'user') {

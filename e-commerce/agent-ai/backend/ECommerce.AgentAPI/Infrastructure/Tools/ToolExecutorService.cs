@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using ECommerce.AgentAPI.Domain.Entities;
 using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
@@ -38,7 +39,9 @@ public sealed class ToolExecutorService : IToolExecutor
             {
                 Success = false,
                 Output = string.Empty,
-                Error = "Sessão inválida."
+                Error = "Sessão inválida.",
+                ToolName = toolCall.Name,
+                Data = null
             };
         }
 
@@ -48,7 +51,9 @@ public sealed class ToolExecutorService : IToolExecutor
             {
                 Success = false,
                 Output = string.Empty,
-                Error = "Tool sem nome."
+                Error = "Tool sem nome.",
+                ToolName = null,
+                Data = null
             };
         }
 
@@ -68,7 +73,15 @@ public sealed class ToolExecutorService : IToolExecutor
                 .InvokeAsync(kernel, args, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             var text = result.GetValue<string>() ?? result.ToString() ?? string.Empty;
-            return new ToolExecutionResult { Success = true, Output = text, Error = null };
+            var (success, data, envelopeError) = UnwrapEnvelope(text);
+            return new ToolExecutionResult
+            {
+                Success = success,
+                Output = text,
+                Error = envelopeError,
+                ToolName = toolCall.Name,
+                Data = data
+            };
         }
         catch (Exception ex)
         {
@@ -76,8 +89,82 @@ public sealed class ToolExecutorService : IToolExecutor
             {
                 Success = false,
                 Output = string.Empty,
-                Error = FormatECommerceToolError(ex)
+                Error = FormatECommerceToolError(ex),
+                ToolName = toolCall.Name,
+                Data = null
             };
+        }
+    }
+
+    /// <summary>
+    /// Desembrulha o envelope JSON devolvido pelos plugins. Aceita três formatos:
+    /// 1. Envelope padrão <c>ECommerceApiResponse{T}</c> → <c>{ success, data, message, errors }</c>;
+    /// 2. Envelope ad-hoc dos plugins para erros locais → <c>{ success: false, message }</c>;
+    /// 3. JSON cru (sem envelope) → devolvido como está em <c>Data</c>.
+    /// Para não JSON (texto livre), devolve <c>Data = null</c> e <c>Success = true</c>.
+    /// </summary>
+    private static (bool Success, JsonElement? Data, string? Error) UnwrapEnvelope(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return (true, null, null);
+        }
+
+        JsonDocument? doc = null;
+        try
+        {
+            doc = JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return (true, null, null);
+        }
+
+        using (doc)
+        {
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return (true, root.Clone(), null);
+            }
+
+            var hasSuccess = root.TryGetProperty("success", out var successEl)
+                             && successEl.ValueKind is JsonValueKind.True or JsonValueKind.False;
+            if (!hasSuccess)
+            {
+                return (true, root.Clone(), null);
+            }
+
+            var success = successEl.GetBoolean();
+            string? error = null;
+
+            if (!success)
+            {
+                if (root.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String)
+                {
+                    error = msgEl.GetString();
+                }
+
+                if (string.IsNullOrWhiteSpace(error)
+                    && root.TryGetProperty("errors", out var errsEl)
+                    && errsEl.ValueKind == JsonValueKind.Array)
+                {
+                    var first = errsEl.EnumerateArray()
+                        .FirstOrDefault(e => e.ValueKind == JsonValueKind.String);
+                    if (first.ValueKind == JsonValueKind.String)
+                    {
+                        error = first.GetString();
+                    }
+                }
+            }
+
+            JsonElement? data = null;
+            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind != JsonValueKind.Null)
+            {
+                data = dataEl.Clone();
+            }
+
+            return (success, data, error);
         }
     }
 

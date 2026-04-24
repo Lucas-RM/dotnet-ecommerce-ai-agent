@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using ECommerce.AgentAPI.Application.Abstractions;
 using ECommerce.AgentAPI.Application.Agents;
+using ECommerce.AgentAPI.Application.Chat;
 using ECommerce.AgentAPI.Application.Options;
 using ECommerce.AgentAPI.Application.UseCases;
 using ECommerce.AgentAPI.Domain.Enums;
@@ -79,6 +80,7 @@ public static class AgentApiDependencyInjection
         services.Configure<AgentOptions>(configuration.GetSection(AgentOptions.SectionName));
         services.AddSingleton<IChatErrorHandler, HttpChatErrorHandler>();
         services.AddScoped<IToolExecutor, ToolExecutorService>();
+        services.AddToolEnvelopeBuilders(typeof(AgentApiDependencyInjection).Assembly);
         services.AddScoped<ProcessUserMessageUseCase>();
         services.AddScoped<ChatAgent>();
         services.AddScoped<AgentOrchestratorMiddleware>();

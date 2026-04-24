@@ -4,8 +4,9 @@ using ECommerce.AgentAPI.Application.Tools;
 namespace ECommerce.AgentAPI.Infrastructure.Formatting;
 
 /// <summary>
-/// Evita exibir respostas vazias ou alucinações óbvias (ex.: nome de tool no lugar de produto)
-/// após a formatação da resposta do assistente.
+/// Aplicado <b>apenas</b> no <c>IntroMessage</c> do caminho "LLM sem tool" em <c>ProcessUserMessageUseCase</c>.
+/// Evita exibir respostas vazias ou alucinações óbvias do modelo (ex.: <c>search_products · —</c> no lugar
+/// de um produto real). Resultados de tool não passam por aqui — eles usam <c>IToolEnvelopeBuilder</c>.
 /// </summary>
 public static class AssistantOutputGuard
 {

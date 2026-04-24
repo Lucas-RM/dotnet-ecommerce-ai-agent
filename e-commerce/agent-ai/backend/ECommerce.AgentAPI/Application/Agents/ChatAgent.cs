@@ -28,7 +28,7 @@ public sealed class ChatAgent
                 },
                 cancellationToken)
             .ConfigureAwait(false);
-        return r.Response.Reply;
+        return JoinIntroAndOutro(r.Response);
     }
 
     public async Task<string> GetReplyTextOnlyAsync(
@@ -36,6 +36,13 @@ public sealed class ChatAgent
         CancellationToken cancellationToken = default)
     {
         var r = await _useCase.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
-        return r.Response.Reply;
+        return JoinIntroAndOutro(r.Response);
+    }
+
+    private static string JoinIntroAndOutro(ChatResponse response)
+    {
+        var parts = new[] { response.IntroMessage, response.OutroMessage }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        return string.Join("\n", parts).Trim();
     }
 }
