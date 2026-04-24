@@ -1,5 +1,6 @@
 using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
+using ECommerce.AgentAPI.Infrastructure.LLM.Google;
 using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 using ECommerce.AgentAPI.Infrastructure.LLM.Ollama;
 using Microsoft.Extensions.Configuration;
@@ -23,6 +24,7 @@ public sealed class LLMFactory : ILLMFactory
         {
             LLMProvider.OpenAI => _sp.GetRequiredService<OpenAILLMService>(),
             LLMProvider.Ollama => _sp.GetRequiredService<OllamaLLMService>(),
+            LLMProvider.Google => _sp.GetRequiredService<GoogleLLMService>(),
             _ => throw new NotSupportedException($"Provedor '{provider}' não suportado.")
         };
 

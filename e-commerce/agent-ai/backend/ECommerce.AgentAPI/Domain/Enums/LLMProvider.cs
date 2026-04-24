@@ -4,5 +4,6 @@ namespace ECommerce.AgentAPI.Domain.Enums;
 public enum LLMProvider
 {
     OpenAI = 0,
-    Ollama = 1
+    Ollama = 1,
+    Google = 2
 }
