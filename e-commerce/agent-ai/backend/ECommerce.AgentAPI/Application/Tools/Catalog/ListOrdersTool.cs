@@ -1,13 +1,17 @@
 using System.Text.Json;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Chat.Builders;
+namespace ECommerce.AgentAPI.Application.Tools.Catalog;
 
-public sealed class ListOrdersEnvelopeBuilder : IToolEnvelopeBuilder
+/// <summary>
+/// <c>list_orders</c> — paginação dos pedidos do usuário. Sem aprovação; envelope escolhe o intro
+/// conforme total/página. Execução em <c>OrderPlugin.ListOrdersAsync</c>.
+/// </summary>
+public sealed class ListOrdersTool : ITool
 {
-    public string ToolName => "list_orders";
+    public string Name => "list_orders";
 
-    public ChatEnvelope Build(JsonElement? data)
+    public ChatEnvelope BuildEnvelope(JsonElement? data)
     {
         var total = EnvelopeJson.GetInt(data, "totalCount") ?? 0;
         if (total == 0)
@@ -15,7 +19,7 @@ public sealed class ListOrdersEnvelopeBuilder : IToolEnvelopeBuilder
             return new ChatEnvelope(
                 IntroMessage: "Você ainda não tem pedidos.",
                 OutroMessage: "Posso ajudar a encontrar produtos?",
-                ToolName: ToolName,
+                ToolName: Name,
                 DataType: "PagedOrders",
                 Data: data);
         }
@@ -27,7 +31,7 @@ public sealed class ListOrdersEnvelopeBuilder : IToolEnvelopeBuilder
         return new ChatEnvelope(
             IntroMessage: intro,
             OutroMessage: "Quer abrir algum pedido específico?",
-            ToolName: ToolName,
+            ToolName: Name,
             DataType: "PagedOrders",
             Data: data);
     }

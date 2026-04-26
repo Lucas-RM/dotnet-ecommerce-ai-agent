@@ -65,9 +65,7 @@ public sealed class ToolExecutorService : IToolExecutor
                 _toolApproval.PrepareApprovedExecution(kernel);
             }
 
-            var plugin = ToolApprovalServiceAdapter.ResolvePluginName(toolCall.Name);
-            var function = toolCall.Name;
-            var fn = kernel.Plugins.GetFunction(plugin, function);
+            var fn = ResolveKernelFunction(kernel, toolCall.Name);
             var args = ToKernelArguments(toolCall.Arguments);
             var result = await fn
                 .InvokeAsync(kernel, args, cancellationToken: cancellationToken)
@@ -206,5 +204,21 @@ public sealed class ToolExecutorService : IToolExecutor
             a[kv.Key] = kv.Value;
         }
         return a;
+    }
+
+    /// <summary>
+    /// Localiza a <see cref="KernelFunction"/> pelo nome anotado em <c>[KernelFunction]</c>,
+    /// varrendo todos os plugins registados no kernel. Evita o mapeamento manual
+    /// <c>functionName → pluginName</c>: o próprio SK já conhece essa relação.
+    /// </summary>
+    private static KernelFunction ResolveKernelFunction(Microsoft.SemanticKernel.Kernel kernel, string functionName)
+    {
+        foreach (var plugin in kernel.Plugins)
+        {
+            if (plugin.TryGetFunction(functionName, out var fn))
+                return fn;
+        }
+
+        throw new KeyNotFoundException($"Tool '{functionName}' não está registrada em nenhum plugin do kernel.");
     }
 }

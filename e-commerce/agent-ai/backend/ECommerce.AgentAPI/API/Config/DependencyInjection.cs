@@ -3,8 +3,8 @@ using System.Text;
 using System.Threading.RateLimiting;
 using ECommerce.AgentAPI.Application.Abstractions;
 using ECommerce.AgentAPI.Application.Agents;
-using ECommerce.AgentAPI.Application.Chat;
 using ECommerce.AgentAPI.Application.Options;
+using ECommerce.AgentAPI.Application.Tools;
 using ECommerce.AgentAPI.Application.UseCases;
 using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
@@ -39,6 +39,9 @@ public static class AgentApiDependencyInjection
 
     public static IServiceCollection AddAgentApi(this IServiceCollection services, IConfiguration configuration)
     {
+        // ── Catálogo de ITool (uma tool, uma classe) — fonte canónica de approval/envelope para tools migradas ──
+        services.AddToolCatalog(typeof(AgentApiDependencyInjection).Assembly);
+
         // ── Aprovação, Kernel, plugins SK (instâncias também criadas em KernelFactory; registo alinha evolução / testes) ──
         services.AddSingleton<ApprovalStateStore>();
         services.AddSingleton<ToolApprovalService>();
@@ -80,7 +83,6 @@ public static class AgentApiDependencyInjection
         services.Configure<AgentOptions>(configuration.GetSection(AgentOptions.SectionName));
         services.AddSingleton<IChatErrorHandler, HttpChatErrorHandler>();
         services.AddScoped<IToolExecutor, ToolExecutorService>();
-        services.AddToolEnvelopeBuilders(typeof(AgentApiDependencyInjection).Assembly);
         services.AddScoped<ProcessUserMessageUseCase>();
         services.AddScoped<ChatAgent>();
         services.AddScoped<AgentOrchestratorMiddleware>();

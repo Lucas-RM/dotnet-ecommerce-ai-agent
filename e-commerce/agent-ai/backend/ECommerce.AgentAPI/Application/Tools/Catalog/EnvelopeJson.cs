@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Text.Json;
 
-namespace ECommerce.AgentAPI.Application.Chat;
+namespace ECommerce.AgentAPI.Application.Tools.Catalog;
 
 /// <summary>
-/// Helpers internos para leitura defensiva de <see cref="JsonElement"/> pelos
-/// <see cref="IToolEnvelopeBuilder"/> (preços formatados em pt-BR, campos opcionais etc.).
+/// Helpers internos para leitura defensiva de <see cref="JsonElement"/> pelas <see cref="ITool"/>
+/// do catálogo (preços formatados em pt-BR, campos opcionais, contagem de arrays etc.).
 /// </summary>
 internal static class EnvelopeJson
 {

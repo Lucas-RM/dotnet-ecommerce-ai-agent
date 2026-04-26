@@ -5,7 +5,7 @@ namespace ECommerce.AgentAPI.Domain.ValueObjects;
 /// <summary>
 /// Envelope padronizado que cada tool entrega à camada de apresentação.
 /// Estrutura: mensagem de início (texto) → dados estruturados → mensagem de fim (texto).
-/// Extensível: novas tools apenas implementam <c>IToolEnvelopeBuilder</c> e devolvem um <see cref="ChatEnvelope"/>.
+/// Extensível: novas tools apenas implementam <c>ITool</c> e devolvem um <see cref="ChatEnvelope"/> em <c>BuildEnvelope</c>.
 /// </summary>
 public sealed record ChatEnvelope(
     string? IntroMessage,

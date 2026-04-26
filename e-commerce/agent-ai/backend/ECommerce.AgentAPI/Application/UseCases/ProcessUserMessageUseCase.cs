@@ -1,7 +1,5 @@
 using ECommerce.AgentAPI.Application.Abstractions;
 using ECommerce.AgentAPI.Application.Agents;
-using ECommerce.AgentAPI.Application.Approval;
-using ECommerce.AgentAPI.Application.Chat;
 using ECommerce.AgentAPI.Application.DTOs;
 using ECommerce.AgentAPI.Application.Options;
 using ECommerce.AgentAPI.Application.Tools;
@@ -18,9 +16,9 @@ namespace ECommerce.AgentAPI.Application.UseCases;
 
 /// <summary>
 /// Orquestra: memória → LLM (via <see cref="ILLMFactory"/>) → aprovação (<see cref="IToolApprovalService"/>) →
-/// tools (<see cref="IToolExecutor"/>) → envelope por tool (<see cref="ToolEnvelopeRegistry"/>).
+/// tools (<see cref="IToolExecutor"/>) → envelope / mensagem de aprovação por tool (<see cref="ToolCatalog"/>).
 /// A montagem do <see cref="ChatResponse"/> é centralizada em <see cref="BuildResponse"/>, de modo que
-/// acrescentar uma tool nova não exige alterações neste arquivo: basta um novo <c>IToolEnvelopeBuilder</c>.
+/// acrescentar uma tool nova não exige alterações neste arquivo: basta uma nova <see cref="ITool"/> no catálogo.
 /// </summary>
 public sealed class ProcessUserMessageUseCase
 {
@@ -36,7 +34,7 @@ public sealed class ProcessUserMessageUseCase
     private readonly IMemoryService _memory;
     private readonly IOptions<AgentOptions> _options;
     private readonly IChatErrorHandler _errorHandler;
-    private readonly ToolEnvelopeRegistry _envelopes;
+    private readonly ToolCatalog _catalog;
 
     public ProcessUserMessageUseCase(
         ILLMFactory llmFactory,
@@ -45,7 +43,7 @@ public sealed class ProcessUserMessageUseCase
         IMemoryService memory,
         IOptions<AgentOptions> options,
         IChatErrorHandler errorHandler,
-        ToolEnvelopeRegistry envelopes)
+        ToolCatalog catalog)
     {
         _llmFactory = llmFactory;
         _tools = tools;
@@ -53,7 +51,7 @@ public sealed class ProcessUserMessageUseCase
         _memory = memory;
         _options = options;
         _errorHandler = errorHandler;
-        _envelopes = envelopes;
+        _catalog = catalog;
     }
 
     public async Task<ChatProcessResult> ExecuteAsync(
@@ -138,7 +136,7 @@ public sealed class ProcessUserMessageUseCase
 
     private async Task<ChatProcessResult> RequestApprovalAsync(string sessionId, ToolCall call)
     {
-        var approvalMessage = ApprovalMessageBuilder.Build(call);
+        var approvalMessage = _catalog.BuildApprovalMessage(call.Name ?? string.Empty, ToArgs(call));
         await _approval
             .StorePendingAsync(
                 new PendingApproval
@@ -168,7 +166,7 @@ public sealed class ProcessUserMessageUseCase
             return Ok(BuildResponse(ChatEnvelope.TextOnly(error)));
         }
 
-        var envelope = _envelopes.BuildFor(call.Name, executionResult.Data);
+        var envelope = _catalog.BuildEnvelope(call.Name ?? string.Empty, executionResult.Data);
         await PersistAssistantReplyAsync(sessionId, JoinIntroOutro(envelope)).ConfigureAwait(false);
         await PruneHistoryAsync(sessionId).ConfigureAwait(false);
         return Ok(BuildResponse(envelope));
@@ -209,7 +207,7 @@ public sealed class ProcessUserMessageUseCase
                 pendingToolName: pending.ToolCall.Name));
         }
 
-        var envelope = _envelopes.BuildFor(pending.ToolCall.Name, executionResult.Data);
+        var envelope = _catalog.BuildEnvelope(pending.ToolCall.Name ?? string.Empty, executionResult.Data);
         await PersistAssistantReplyAsync(sessionId, JoinIntroOutro(envelope)).ConfigureAwait(false);
         await PruneHistoryAsync(sessionId).ConfigureAwait(false);
         return Ok(BuildResponse(envelope));
@@ -294,4 +292,17 @@ public sealed class ProcessUserMessageUseCase
 
     private Task PruneHistoryAsync(string sessionId) =>
         _memory.PruneHistoryAsync(sessionId, _options.Value.MaxConversationTurns);
+
+    /// <summary>
+    /// Converte <see cref="ToolCall.Arguments"/> (<c>Dictionary&lt;string,object&gt;</c>, não-null por
+    /// contrato) para <c>IReadOnlyDictionary&lt;string,object?&gt;</c> esperado por
+    /// <see cref="ITool.BuildApprovalMessage"/>. Uma cópia defensiva evita mutações cruzadas.
+    /// </summary>
+    private static IReadOnlyDictionary<string, object?> ToArgs(ToolCall call)
+    {
+        var d = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var kv in call.Arguments)
+            d[kv.Key] = kv.Value;
+        return d;
+    }
 }

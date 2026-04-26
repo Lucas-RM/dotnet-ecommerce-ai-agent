@@ -6,7 +6,7 @@ namespace ECommerce.AgentAPI.Infrastructure.Formatting;
 /// <summary>
 /// Aplicado <b>apenas</b> no <c>IntroMessage</c> do caminho "LLM sem tool" em <c>ProcessUserMessageUseCase</c>.
 /// Evita exibir respostas vazias ou alucinações óbvias do modelo (ex.: <c>search_products · —</c> no lugar
-/// de um produto real). Resultados de tool não passam por aqui — eles usam <c>IToolEnvelopeBuilder</c>.
+/// de um produto real). Resultados de tool não passam por aqui — eles usam <c>ITool.BuildEnvelope</c>.
 /// </summary>
 public static class AssistantOutputGuard
 {

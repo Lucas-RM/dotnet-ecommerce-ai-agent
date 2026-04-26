@@ -1,137 +1,79 @@
+using System.ComponentModel;
+using System.Reflection;
 using ECommerce.AgentAPI.Domain.ValueObjects;
+using ECommerce.AgentAPI.Infrastructure.Tools.Plugins;
+using Microsoft.SemanticKernel;
 
 namespace ECommerce.AgentAPI.Application.Tools;
 
-/// <summary> Definições de tools (nome, descrição, parâmetros) para o LLM — alinhado aos plugins. </summary>
+/// <summary>
+/// Projeta o schema das tools (nome, descrição, parâmetros) diretamente dos plugins do
+/// Semantic Kernel, lendo <see cref="KernelFunctionAttribute"/> e <see cref="DescriptionAttribute"/>
+/// via reflection. A fonte de verdade passa a ser o próprio <c>[KernelFunction]</c> do plugin —
+/// adicionar uma tool exige apenas declará-la no plugin; este registry descobre sozinho.
+/// </summary>
 public static class ToolRegistry
 {
-    public static IReadOnlyList<ToolDefinition> GetDefinitions() =>
+    private static readonly Type[] PluginTypes =
     [
-        SearchProducts(),
-        GetProduct(),
-        GetCart(),
-        AddCartItem(),
-        UpdateCartItem(),
-        RemoveCartItem(),
-        ClearCart(),
-        ListOrders(),
-        GetOrder(),
-        Checkout()
+        typeof(ProductPlugin),
+        typeof(CartPlugin),
+        typeof(OrderPlugin)
     ];
 
-    private static ToolDefinition SearchProducts() => new()
-    {
-        Name = "search_products",
-        Description = "Busca ou lista produtos. search/category vazios = listar a página; aumente pageSize (ex. 20) para mais itens.",
-        Parameters =
-        [
-            new() { Name = "search", Type = "string", Description = "Termo de busca" },
-            new() { Name = "category", Type = "string", Description = "Categoria", Required = false },
-            new() { Name = "page", Type = "integer", Description = "Página (default 1)", Required = false },
-            new() { Name = "pageSize", Type = "integer", Description = "Itens por página (default 5)", Required = false }
-        ]
-    };
+    private static readonly Lazy<IReadOnlyList<ToolDefinition>> Cached =
+        new(BuildDefinitions, LazyThreadSafetyMode.ExecutionAndPublication);
 
-    private static ToolDefinition GetProduct() => new()
-    {
-        Name = "get_product",
-        Description = "Detalhes de um produto pelo id (Guid) exatamente como em search_products.",
-        Parameters = [
-            new()
+    public static IReadOnlyList<ToolDefinition> GetDefinitions() => Cached.Value;
+
+    private static IReadOnlyList<ToolDefinition> BuildDefinitions() =>
+        PluginTypes
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            .Select(method => (Method: method, Attr: method.GetCustomAttribute<KernelFunctionAttribute>()))
+            .Where(x => x.Attr is not null)
+            .Select(x => new ToolDefinition
             {
-                Name = "productId",
-                Type = "string",
-                Description = "UUID do produto: campo 'id' no JSON de search_products (não o número do nome).",
-                Required = true
-            }
-        ]
+                Name = ResolveFunctionName(x.Method, x.Attr!),
+                Description = x.Method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty,
+                Parameters = x.Method
+                    .GetParameters()
+                    .Select(ToToolParameter)
+                    .ToList()
+            })
+            .OrderBy(d => d.Name, StringComparer.Ordinal)
+            .ToList();
+
+    private static string ResolveFunctionName(MethodInfo method, KernelFunctionAttribute attr) =>
+        !string.IsNullOrWhiteSpace(attr.Name)
+            ? attr.Name!
+            : StripAsyncSuffix(method.Name);
+
+    private static string StripAsyncSuffix(string name) =>
+        name.EndsWith("Async", StringComparison.Ordinal) && name.Length > "Async".Length
+            ? name[..^"Async".Length]
+            : name;
+
+    private static ToolParameter ToToolParameter(ParameterInfo p) => new()
+    {
+        Name = p.Name ?? string.Empty,
+        Type = MapJsonSchemaType(p.ParameterType),
+        Description = p.GetCustomAttribute<DescriptionAttribute>()?.Description,
+        Required = !p.HasDefaultValue
     };
 
-    private static ToolDefinition GetCart() => new()
+    private static string MapJsonSchemaType(Type type)
     {
-        Name = "get_cart",
-        Description = "Carrinho atual com itens e totais.",
-        Parameters = []
-    };
-
-    private static ToolDefinition AddCartItem() => new()
-    {
-        Name = "add_cart_item",
-        Description = "Adiciona um produto ao carrinho (sempre após confirmação). Só após search_products; productId = campo 'id' (UUID) do retorno.",
-        Parameters =
-        [
-            new()
-            {
-                Name = "productId",
-                Type = "string",
-                Description = "UUID do retorno de search_products (campo 'id'). Opcional: extras productName, unitPrice para a mensagem de confirmação.",
-                Required = true
-            },
-            new() { Name = "quantity", Type = "integer", Description = "Quantidade", Required = true }
-        ]
-    };
-
-    private static ToolDefinition UpdateCartItem() => new()
-    {
-        Name = "update_cart_item",
-        Description = "Atualiza quantidade de um item no carrinho. productId = UUID do produto (campo 'id' de search_products).",
-        Parameters =
-        [
-            new()
-            {
-                Name = "productId",
-                Type = "string",
-                Description = "UUID (campo 'id') do produto; nunca inventar ou trocar por número do título 'Produto N'.",
-                Required = true
-            },
-            new() { Name = "quantity", Type = "integer", Description = "Nova quantidade", Required = true }
-        ]
-    };
-
-    private static ToolDefinition RemoveCartItem() => new()
-    {
-        Name = "remove_cart_item",
-        Description = "Remove um produto do carrinho. productId = UUID do retorno de search_products.",
-        Parameters = [
-            new()
-            {
-                Name = "productId",
-                Type = "string",
-                Description = "UUID (campo 'id') do produto.",
-                Required = true
-            }
-        ]
-    };
-
-    private static ToolDefinition ClearCart() => new()
-    {
-        Name = "clear_cart",
-        Description = "Esvazia o carrinho (ação irreversível).",
-        Parameters = []
-    };
-
-    private static ToolDefinition ListOrders() => new()
-    {
-        Name = "list_orders",
-        Description = "Lista pedidos do usuário.",
-        Parameters =
-        [
-            new() { Name = "page", Type = "integer", Description = "Página", Required = false },
-            new() { Name = "pageSize", Type = "integer", Description = "Tamanho da página", Required = false }
-        ]
-    };
-
-    private static ToolDefinition GetOrder() => new()
-    {
-        Name = "get_order",
-        Description = "Detalhes de um pedido pelo ID.",
-        Parameters = [new() { Name = "orderId", Type = "string", Description = "ID do pedido", Required = true }]
-    };
-
-    private static ToolDefinition Checkout() => new()
-    {
-        Name = "checkout",
-        Description = "Finaliza o pedido a partir do carrinho (sempre após confirmação).",
-        Parameters = []
-    };
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        return Type.GetTypeCode(underlying) switch
+        {
+            TypeCode.Boolean => "boolean",
+            TypeCode.Byte or TypeCode.SByte
+                or TypeCode.Int16 or TypeCode.UInt16
+                or TypeCode.Int32 or TypeCode.UInt32
+                or TypeCode.Int64 or TypeCode.UInt64 => "integer",
+            TypeCode.Single or TypeCode.Double or TypeCode.Decimal => "number",
+            TypeCode.String or TypeCode.Char => "string",
+            _ => "string"
+        };
+    }
 }

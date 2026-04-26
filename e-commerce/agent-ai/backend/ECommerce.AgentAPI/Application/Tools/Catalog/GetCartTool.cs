@@ -1,13 +1,17 @@
 using System.Text.Json;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Chat.Builders;
+namespace ECommerce.AgentAPI.Application.Tools.Catalog;
 
-public sealed class GetCartEnvelopeBuilder : IToolEnvelopeBuilder
+/// <summary>
+/// <c>get_cart</c> — leitura do carrinho atual. Sem aprovação; envelope adapta o intro ao carrinho
+/// vazio vs. preenchido (conta itens, totaliza preço). Execução em <c>CartPlugin.GetCartAsync</c>.
+/// </summary>
+public sealed class GetCartTool : ITool
 {
-    public string ToolName => "get_cart";
+    public string Name => "get_cart";
 
-    public ChatEnvelope Build(JsonElement? data)
+    public ChatEnvelope BuildEnvelope(JsonElement? data)
     {
         var itemCount = EnvelopeJson.ArrayLength(data, "items");
         if (itemCount == 0)
@@ -15,7 +19,7 @@ public sealed class GetCartEnvelopeBuilder : IToolEnvelopeBuilder
             return new ChatEnvelope(
                 IntroMessage: "Seu carrinho está vazio.",
                 OutroMessage: "Quer que eu busque produtos na loja?",
-                ToolName: ToolName,
+                ToolName: Name,
                 DataType: "Cart",
                 Data: data);
         }
@@ -25,7 +29,7 @@ public sealed class GetCartEnvelopeBuilder : IToolEnvelopeBuilder
         return new ChatEnvelope(
             IntroMessage: intro,
             OutroMessage: "Deseja finalizar a compra ou continuar comprando?",
-            ToolName: ToolName,
+            ToolName: Name,
             DataType: "Cart",
             Data: data);
     }

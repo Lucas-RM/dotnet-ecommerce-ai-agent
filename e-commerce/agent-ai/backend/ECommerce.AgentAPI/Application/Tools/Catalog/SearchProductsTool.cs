@@ -1,13 +1,18 @@
 using System.Text.Json;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Chat.Builders;
+namespace ECommerce.AgentAPI.Application.Tools.Catalog;
 
-public sealed class SearchProductsEnvelopeBuilder : IToolEnvelopeBuilder
+/// <summary>
+/// <c>search_products</c> — listagem paginada / busca de produtos da loja. Sem aprovação; envelope
+/// escolhe o intro conforme total vs. itens mostrados (e trata o caso "sem resultados" com texto
+/// e outro dedicados). Execução em <c>ProductPlugin.SearchProductsAsync</c>.
+/// </summary>
+public sealed class SearchProductsTool : ITool
 {
-    public string ToolName => "search_products";
+    public string Name => "search_products";
 
-    public ChatEnvelope Build(JsonElement? data)
+    public ChatEnvelope BuildEnvelope(JsonElement? data)
     {
         var total = EnvelopeJson.GetInt(data, "totalCount") ?? 0;
         var shown = EnvelopeJson.ArrayLength(data, "items");
@@ -17,7 +22,7 @@ public sealed class SearchProductsEnvelopeBuilder : IToolEnvelopeBuilder
             return new ChatEnvelope(
                 IntroMessage: "Não encontrei produtos com esse filtro.",
                 OutroMessage: "Quer tentar outro termo ou categoria?",
-                ToolName: ToolName,
+                ToolName: Name,
                 DataType: "PagedProducts",
                 Data: data);
         }
@@ -28,7 +33,7 @@ public sealed class SearchProductsEnvelopeBuilder : IToolEnvelopeBuilder
         return new ChatEnvelope(
             IntroMessage: intro,
             OutroMessage: "Quer ver detalhes de algum ou adicionar ao carrinho?",
-            ToolName: ToolName,
+            ToolName: Name,
             DataType: "PagedProducts",
             Data: data);
     }

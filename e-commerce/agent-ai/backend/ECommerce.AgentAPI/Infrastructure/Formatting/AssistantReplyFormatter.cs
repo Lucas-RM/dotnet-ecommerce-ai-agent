@@ -8,7 +8,7 @@ namespace ECommerce.AgentAPI.Infrastructure.Formatting;
 /// <summary>
 /// Rede de segurança aplicada <b>apenas</b> no caminho "LLM sem tool" de <c>ProcessUserMessageUseCase</c>.
 /// Se o modelo (apesar do prompt) colar JSON bruto no texto da resposta, converte-o em português legível.
-/// O caminho de tool já não passa por aqui: a apresentação é controlada por <c>IToolEnvelopeBuilder</c> +
+/// O caminho de tool já não passa por aqui: a apresentação é controlada por <c>ITool.BuildEnvelope</c> +
 /// <c>data</c> estruturado no <c>ChatResponse</c>.
 /// </summary>
 public static class AssistantReplyFormatter

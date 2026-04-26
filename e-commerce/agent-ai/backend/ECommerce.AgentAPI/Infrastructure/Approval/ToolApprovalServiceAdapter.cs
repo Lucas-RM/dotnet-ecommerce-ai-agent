@@ -2,7 +2,6 @@ using System.Text.RegularExpressions;
 using ECommerce.AgentAPI.Domain.Entities;
 using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
-using ECommerce.AgentAPI.Infrastructure.Tools.Plugins;
 using Microsoft.SemanticKernel;
 
 namespace ECommerce.AgentAPI.Infrastructure.Approval;
@@ -57,20 +56,9 @@ public sealed class ToolApprovalServiceAdapter : IToolApprovalService
         return ApprovalClassification.Ambiguous;
     }
 
-    public static string ResolvePluginName(string functionName) =>
-        functionName switch
-        {
-            "search_products" or "get_product" => nameof(ProductPlugin),
-            "get_cart" or "add_cart_item" or "update_cart_item" or "remove_cart_item" or "clear_cart" => nameof(
-                CartPlugin),
-            "list_orders" or "get_order" or "checkout" => nameof(OrderPlugin),
-            _ => nameof(CartPlugin)
-        };
-
     private static PendingToolCall ToPendingToolCall(PendingApproval p) =>
         new()
         {
-            PluginName = ResolvePluginName(p.ToolCall.Name),
             FunctionName = p.ToolCall.Name,
             Arguments = ToKernelArguments(p.ToolCall.Arguments),
             ApprovalMessage = p.ApprovalMessage,
