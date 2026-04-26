@@ -34,7 +34,6 @@ export interface ChatResponse {
   tool: ChatToolInfo | null;
   data: unknown | null;
   requiresApproval: boolean;
-  pendingToolName: string | null;
   /** Provedor ativo no Agent (`openai` | `google`), quando o backend expõe. */
   llmProvider?: string | null;
 }
@@ -58,5 +57,4 @@ export interface AgentChatMessage {
   /** Payload estruturado da tool; cada `dataType` mapeia para um DTO em `./dtos`. */
   data?: unknown | null;
   requiresApproval?: boolean;
-  pendingToolName?: string | null;
 }

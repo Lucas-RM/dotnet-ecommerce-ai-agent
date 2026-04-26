@@ -30,7 +30,7 @@ public sealed class CartPlugin(IECommerceApi api)
         {
             return KernelJsonSerializer.Serialize(
                 new
-                { success = false, message = "Não encontrei esse item na loja. Peça uma nova busca do produto e tente de novo." });
+                { success = false, message = "Não encontrei esse produto na loja com segurança. Peça para eu listar opções e informe o nome completo do produto." });
         }
 
         var dto = new AddCartItemDto(id.Value, quantity);
@@ -54,7 +54,7 @@ public sealed class CartPlugin(IECommerceApi api)
                 new
                 {
                     success = false,
-                    message = "Não consegui identificar com certeza esse item no carrinho. Chame get_cart e tente de novo com o UUID exato do item ou com o nome completo (ex.: \"Produto Teste\")."
+                    message = "Não consegui identificar esse item no carrinho com segurança. Peça para eu listar seu carrinho e informe o nome completo do produto (ex.: \"Produto Teste\")."
                 });
         }
 
@@ -75,7 +75,7 @@ public sealed class CartPlugin(IECommerceApi api)
                 new
                 {
                     success = false,
-                    message = "Não consegui identificar com certeza esse item no carrinho. Chame get_cart e tente de novo com o UUID exato do item ou com o nome completo."
+                    message = "Não consegui identificar esse item no carrinho com segurança. Peça para eu listar seu carrinho e informe o nome completo do produto."
                 });
         }
 

@@ -30,7 +30,7 @@ public sealed class ToolCatalog
 
     /// <summary>
     /// Monta a mensagem de aprovação via <see cref="ITool.BuildApprovalMessage"/>. Se a tool não existir
-    /// ou devolver <c>null</c>/vazio, volta ao texto genérico "Confirma a ação **{name}**?".
+    /// ou devolver <c>null</c>/vazio, volta a um texto genérico sem expor nomes internos.
     /// </summary>
     public string BuildApprovalMessage(string name, IReadOnlyDictionary<string, object?> arguments)
     {
@@ -39,8 +39,7 @@ public sealed class ToolCatalog
         if (!string.IsNullOrEmpty(msg))
             return msg;
 
-        var trimmed = (name ?? string.Empty).Trim();
-        return $"Confirma a ação **{trimmed}**? Responda **sim** para prosseguir ou **não** para cancelar.";
+        return "Confirma esta ação? Responda **sim** para prosseguir ou **não** para cancelar.";
     }
 
     /// <summary>

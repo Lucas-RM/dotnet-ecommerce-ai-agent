@@ -1,13 +1,15 @@
 using System.Globalization;
+using System.Net;
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Tools;
+using Refit;
 
 namespace ECommerce.AgentAPI.Infrastructure.Approval;
 
 /// <summary>
 /// Resultado de uma enriquecimento de argumentos antes da aprovação. Quando <see cref="Error"/>
 /// é não-nulo, o use case deve curto-circuitar o fluxo e devolver a mensagem ao usuário sem
-/// persistir nada de pending — a ideia é pedir ao LLM (via histórico) uma nova busca/get_cart.
+/// persistir nada de pending.
 /// </summary>
 public sealed record ApprovalArgumentEnrichment(
     Dictionary<string, object> Arguments,
@@ -61,37 +63,63 @@ public sealed class ApprovalArgumentEnricher : IApprovalArgumentEnricher
         bool isRemove,
         CancellationToken cancellationToken)
     {
-        var raw = ExtractProductIdentifier(arguments);
-        var resolved = await ProductIdResolver
-            .TryResolveCartItemAsync(_api, raw, cancellationToken)
-            .ConfigureAwait(false);
-        if (resolved is null)
+        try
         {
-            var action = isRemove ? "remover" : "atualizar";
-            var error =
-                $"Não consegui identificar com certeza qual item você quer {action} no carrinho. Me diga o nome exato do produto (ex.: *Produto Teste*) ou peça a lista do carrinho.";
-            return new ApprovalArgumentEnrichment(arguments, error);
-        }
+            var raw = ExtractProductIdentifier(arguments);
+            var resolved = await ProductIdResolver
+                .TryResolveCartItemAsync(_api, raw, cancellationToken)
+                .ConfigureAwait(false);
+            if (resolved is null)
+            {
+                var action = isRemove ? "remover" : "atualizar";
+                var error =
+                    $"Não consegui identificar com segurança qual item você quer {action} no carrinho. Peça para eu listar seu carrinho e informe o nome completo do produto (ex.: *Produto X*).";
+                return new ApprovalArgumentEnrichment(arguments, error);
+            }
 
-        return new ApprovalArgumentEnrichment(Enrich(arguments, resolved), null);
+            return new ApprovalArgumentEnrichment(Enrich(arguments, resolved), null);
+        }
+        catch (ApiException apiEx)
+        {
+            return new ApprovalArgumentEnrichment(arguments, MapApiExceptionToBusinessMessage(apiEx, duringCartLookup: true));
+        }
+        catch (Exception)
+        {
+            const string generic =
+                "Houve um problema ao consultar seu carrinho agora. Tente novamente em instantes.";
+            return new ApprovalArgumentEnrichment(arguments, generic);
+        }
     }
 
     private async Task<ApprovalArgumentEnrichment> EnrichFromCatalogAsync(
         Dictionary<string, object> arguments,
         CancellationToken cancellationToken)
     {
-        var raw = ExtractProductIdentifier(arguments);
-        var resolved = await ProductIdResolver
-            .TryResolveCatalogProductAsync(_api, raw, cancellationToken)
-            .ConfigureAwait(false);
-        if (resolved is null)
+        try
         {
-            const string error =
-                "Não localizei esse produto na loja. Peça uma nova busca (search_products) pelo nome e tente de novo.";
-            return new ApprovalArgumentEnrichment(arguments, error);
-        }
+            var raw = ExtractProductIdentifier(arguments);
+            var resolved = await ProductIdResolver
+                .TryResolveCatalogProductAsync(_api, raw, cancellationToken)
+                .ConfigureAwait(false);
+            if (resolved is null)
+            {
+                const string error =
+                    "Não localizei esse produto na loja com segurança. Peça para eu listar opções e informe o nome completo do produto.";
+                return new ApprovalArgumentEnrichment(arguments, error);
+            }
 
-        return new ApprovalArgumentEnrichment(Enrich(arguments, resolved), null);
+            return new ApprovalArgumentEnrichment(Enrich(arguments, resolved), null);
+        }
+        catch (ApiException apiEx)
+        {
+            return new ApprovalArgumentEnrichment(arguments, MapApiExceptionToBusinessMessage(apiEx, duringCartLookup: false));
+        }
+        catch (Exception)
+        {
+            const string generic =
+                "Houve um problema ao consultar os produtos da loja agora. Tente novamente em instantes.";
+            return new ApprovalArgumentEnrichment(arguments, generic);
+        }
     }
 
     /// <summary>
@@ -138,5 +166,32 @@ public sealed class ApprovalArgumentEnricher : IApprovalArgumentEnricher
         }
         value = s;
         return true;
+    }
+
+    private static string MapApiExceptionToBusinessMessage(ApiException apiEx, bool duringCartLookup)
+    {
+        var detail = ECommerceApiErrorMessageReader.TryGetMessageFromApiException(apiEx);
+        if (!string.IsNullOrWhiteSpace(detail))
+        {
+            return detail!;
+        }
+
+        return apiEx.StatusCode switch
+        {
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
+                "Não consegui acessar sua conta da loja no momento. Tente novamente em instantes.",
+            HttpStatusCode.BadRequest when duringCartLookup =>
+                "Não consegui validar esse item no seu carrinho. Peça para eu listar o carrinho e tente novamente com o nome completo do produto.",
+            HttpStatusCode.BadRequest =>
+                "Não consegui validar esse produto na loja. Peça para eu listar opções e tente novamente com o nome completo.",
+            HttpStatusCode.NotFound when duringCartLookup =>
+                "Não encontrei esse item no seu carrinho. Peça para eu listar o carrinho e confirme o produto desejado.",
+            HttpStatusCode.NotFound =>
+                "Não encontrei esse produto na loja. Peça para eu listar opções e confirme o nome completo.",
+            _ when duringCartLookup =>
+                "Houve um problema ao consultar seu carrinho agora. Tente novamente em instantes.",
+            _ =>
+                "Houve um problema ao consultar os produtos da loja agora. Tente novamente em instantes."
+        };
     }
 }

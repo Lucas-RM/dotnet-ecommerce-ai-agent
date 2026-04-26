@@ -98,8 +98,7 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
         outroMessage: res.outroMessage,
         tool: res.tool,
         data: res.data,
-        requiresApproval: res.requiresApproval,
-        pendingToolName: res.pendingToolName
+        requiresApproval: res.requiresApproval
       }
     ];
     this.persistMessages();
@@ -124,8 +123,7 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
     this.approvalOpen = true;
     const dref = this.dialog.open(ApprovalDialogComponent, {
       data: {
-        approvalMessage: res.introMessage ?? '',
-        pendingToolName: res.pendingToolName
+        approvalMessage: res.introMessage ?? ''
       },
       disableClose: false
     });

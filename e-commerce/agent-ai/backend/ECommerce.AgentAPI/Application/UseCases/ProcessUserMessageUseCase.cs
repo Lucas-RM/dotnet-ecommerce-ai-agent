@@ -95,7 +95,7 @@ public sealed class ProcessUserMessageUseCase
                 ApprovalClassification.Confirmed => await ExecuteApprovedToolAsync(existing, command, cancellationToken)
                     .ConfigureAwait(false),
                 ApprovalClassification.Denied => await CancelPendingAsync(sessionId).ConfigureAwait(false),
-                _ => AmbiguousApprovalResult(existing)
+                _ => AmbiguousApprovalResult()
             };
         }
 
@@ -169,8 +169,7 @@ public sealed class ProcessUserMessageUseCase
 
         return Ok(BuildResponse(
             ChatEnvelope.TextOnly(approvalMessage),
-            requiresApproval: true,
-            pendingToolName: call.Name));
+            requiresApproval: true));
     }
 
     private async Task<ChatProcessResult> HandleToolResultAsync(
@@ -217,13 +216,10 @@ public sealed class ProcessUserMessageUseCase
 
         if (!executionResult.Success)
         {
-            // Mantém a aprovação pendente para permitir nova tentativa do usuário.
-            await _approval.StorePendingAsync(pending).ConfigureAwait(false);
             var error = executionResult.Error ?? DefaultApprovedToolErrorMessage;
-            return Ok(BuildResponse(
-                ChatEnvelope.TextOnly(error),
-                requiresApproval: true,
-                pendingToolName: pending.ToolCall.Name));
+            await PersistAssistantReplyAsync(sessionId, error).ConfigureAwait(false);
+            await PruneHistoryAsync(sessionId).ConfigureAwait(false);
+            return Ok(BuildResponse(ChatEnvelope.TextOnly(error)));
         }
 
         var envelope = _catalog.BuildEnvelope(pending.ToolCall.Name ?? string.Empty, executionResult.Data);
@@ -239,11 +235,10 @@ public sealed class ProcessUserMessageUseCase
         return Ok(BuildResponse(ChatEnvelope.TextOnly(CancelPendingMessage)));
     }
 
-    private static ChatProcessResult AmbiguousApprovalResult(PendingApproval pending) =>
+    private static ChatProcessResult AmbiguousApprovalResult() =>
         Ok(BuildResponse(
             ChatEnvelope.TextOnly(AmbiguousApprovalMessage),
-            requiresApproval: true,
-            pendingToolName: pending.ToolCall.Name));
+            requiresApproval: false));
 
     /// <summary>
     /// Único ponto de montagem do <see cref="ChatResponse"/> a partir de um <see cref="ChatEnvelope"/>.
@@ -251,8 +246,7 @@ public sealed class ProcessUserMessageUseCase
     /// </summary>
     private static ChatResponse BuildResponse(
         ChatEnvelope envelope,
-        bool requiresApproval = false,
-        string? pendingToolName = null)
+        bool requiresApproval = false)
     {
         var toolInfo = string.IsNullOrWhiteSpace(envelope.ToolName)
             ? null
@@ -268,8 +262,7 @@ public sealed class ProcessUserMessageUseCase
             OutroMessage = envelope.OutroMessage,
             Tool = toolInfo,
             Data = envelope.Data,
-            RequiresApproval = requiresApproval,
-            PendingToolName = pendingToolName
+            RequiresApproval = requiresApproval
         };
     }
 

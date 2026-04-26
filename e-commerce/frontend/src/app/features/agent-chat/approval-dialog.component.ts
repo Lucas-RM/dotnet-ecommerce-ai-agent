@@ -7,7 +7,6 @@ import { ChatReplyHtmlPipe } from './chat-reply-html.pipe';
 /** Dados passados ao <code>MatDialog</code> para aprovação de tool. */
 export interface AgentApprovalDialogData {
   approvalMessage: string;
-  pendingToolName?: string | null;
 }
 
 /**
