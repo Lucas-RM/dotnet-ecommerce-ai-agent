@@ -44,16 +44,22 @@ public sealed class CartPlugin(IECommerceApi api)
         [Description("UUID (campo 'id') do produto no retorno de search_products / carrinho")] string productId,
         [Description("Nova quantidade desejada")] int quantity)
     {
-        var id = await ProductIdResolver.TryResolveProductGuidAsync(_api, productId).ConfigureAwait(false);
-        if (id is null)
+        // Resolução estrita contra o carrinho: impede que um "2" (dígito vindo do LLM) vire "Produto 2"
+        // via heurística de índice de catálogo. Se não der pra identificar o item dentro do carrinho atual,
+        // devolvemos um envelope de erro para o LLM pedir get_cart e reconfirmar.
+        var resolved = await ProductIdResolver.TryResolveCartItemAsync(_api, productId).ConfigureAwait(false);
+        if (resolved is null)
         {
             return KernelJsonSerializer.Serialize(
                 new
-                { success = false, message = "Não encontrei esse item no carrinho. Confira o carrinho ou busque o produto de novo." });
+                {
+                    success = false,
+                    message = "Não consegui identificar com certeza esse item no carrinho. Chame get_cart e tente de novo com o UUID exato do item ou com o nome completo (ex.: \"Produto Teste\")."
+                });
         }
 
         var dto = new UpdateCartItemDto(quantity);
-        var response = await _api.UpdateCartItemAsync(id.Value, dto);
+        var response = await _api.UpdateCartItemAsync(resolved.Id, dto);
         return KernelJsonSerializer.Serialize(response);
     }
 
@@ -62,15 +68,18 @@ public sealed class CartPlugin(IECommerceApi api)
     public async Task<string> RemoveCartItemAsync(
         [Description("UUID (campo 'id') do produto a remover")] string productId)
     {
-        var id = await ProductIdResolver.TryResolveProductGuidAsync(_api, productId).ConfigureAwait(false);
-        if (id is null)
+        var resolved = await ProductIdResolver.TryResolveCartItemAsync(_api, productId).ConfigureAwait(false);
+        if (resolved is null)
         {
             return KernelJsonSerializer.Serialize(
                 new
-                { success = false, message = "Não encontrei esse item. Confira o carrinho ou busque o produto de novo." });
+                {
+                    success = false,
+                    message = "Não consegui identificar com certeza esse item no carrinho. Chame get_cart e tente de novo com o UUID exato do item ou com o nome completo."
+                });
         }
 
-        var response = await _api.RemoveCartItemAsync(id.Value);
+        var response = await _api.RemoveCartItemAsync(resolved.Id);
         return KernelJsonSerializer.Serialize(response);
     }
 

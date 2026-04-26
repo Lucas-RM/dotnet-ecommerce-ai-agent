@@ -65,6 +65,11 @@ public static class AgentApiDependencyInjection
         // ── Aprovação (domínio) — adaptador sobre ToolApprovalService persistente em memória ──
         services.AddScoped<IToolApprovalService, ToolApprovalServiceAdapter>();
 
+        // ── Pré-resolução de produto antes da aprovação: a pergunta ao usuário passa a refletir
+        //    o item canônico (nome, preço, UUID), não o palpite cru do LLM. Depende de IECommerceApi,
+        //    por isso scoped — segue a mesma lifetime dos plugins do SK.
+        services.AddScoped<IApprovalArgumentEnricher, ApprovalArgumentEnricher>();
+
         // ── Memória: volátil (padrão) com AgentMemoryStore ou Redis (multi-instância) ──
         var memProvider = configuration["Memory:Provider"]?.ToLowerInvariant() ?? "volatile";
         if (memProvider is "redis")

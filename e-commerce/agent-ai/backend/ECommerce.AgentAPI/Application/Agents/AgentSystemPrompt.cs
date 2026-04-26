@@ -22,6 +22,12 @@ public static class AgentSystemPrompt
         - Em add_cart_item, update_cart_item e remove_cart_item, o parâmetro productId é SEMPRE o UUID (campo
           "id" no JSON de search_products ou get_product). Nunca use o número do nome (ex.: "10" de "Produto 10")
           sozinho como id; use a string exata de id retornada pela tool.
+        - Para update_cart_item e remove_cart_item, SEMPRE chame get_cart primeiro, localize o item pelo nome
+          que o usuário citou e use o "productId" exato (UUID) daquele item como argumento. Nunca derive o
+          productId de dígitos da mensagem do usuário: em "diminua 2 unidades do produto teste" a "2" é
+          quantidade, não produto; o produto é "Produto Teste" — procure-o no retorno de get_cart.
+        - Se o usuário pedir para diminuir/aumentar N unidades de um item, a nova quantidade a enviar em
+          update_cart_item é (quantidade atual do item no carrinho ± N), nunca o próprio N isolado.
 
         FLUXO DE APROVAÇÃO:
         1. Usuário expressa intenção (ex: "adicionar iPhone ao carrinho").

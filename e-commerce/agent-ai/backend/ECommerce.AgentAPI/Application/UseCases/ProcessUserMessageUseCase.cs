@@ -7,6 +7,7 @@ using ECommerce.AgentAPI.Domain.Entities;
 using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
+using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.Formatting;
 using ECommerce.AgentAPI.Models;
 using Microsoft.AspNetCore.Http;
@@ -35,6 +36,7 @@ public sealed class ProcessUserMessageUseCase
     private readonly IOptions<AgentOptions> _options;
     private readonly IChatErrorHandler _errorHandler;
     private readonly ToolCatalog _catalog;
+    private readonly IApprovalArgumentEnricher _approvalEnricher;
 
     public ProcessUserMessageUseCase(
         ILLMFactory llmFactory,
@@ -43,7 +45,8 @@ public sealed class ProcessUserMessageUseCase
         IMemoryService memory,
         IOptions<AgentOptions> options,
         IChatErrorHandler errorHandler,
-        ToolCatalog catalog)
+        ToolCatalog catalog,
+        IApprovalArgumentEnricher approvalEnricher)
     {
         _llmFactory = llmFactory;
         _tools = tools;
@@ -52,6 +55,7 @@ public sealed class ProcessUserMessageUseCase
         _options = options;
         _errorHandler = errorHandler;
         _catalog = catalog;
+        _approvalEnricher = approvalEnricher;
     }
 
     public async Task<ChatProcessResult> ExecuteAsync(
@@ -122,6 +126,21 @@ public sealed class ProcessUserMessageUseCase
 
             if (_approval.RequiresApproval(call.Name))
             {
+                // Pré-resolve o produto (quando aplicável) antes de pedir aprovação: garante que o
+                // texto da pergunta ("Deseja atualizar X para N?") corresponda exatamente ao item
+                // que será tocado. Se a resolução falhar, interrompemos o fluxo aqui mesmo — o
+                // usuário recebe um texto amigável e nada fica pendente para "sim/não".
+                var enrichment = await _approvalEnricher
+                    .EnrichAsync(call.Name ?? string.Empty, call.Arguments, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(enrichment.Error))
+                {
+                    await PersistAssistantReplyAsync(sessionId, enrichment.Error).ConfigureAwait(false);
+                    await PruneHistoryAsync(sessionId).ConfigureAwait(false);
+                    return Ok(BuildResponse(ChatEnvelope.TextOnly(enrichment.Error)));
+                }
+
+                call.Arguments = enrichment.Arguments;
                 return await RequestApprovalAsync(sessionId, call).ConfigureAwait(false);
             }
 
