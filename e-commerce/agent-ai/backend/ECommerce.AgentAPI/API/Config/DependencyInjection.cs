@@ -46,6 +46,9 @@ public static class AgentApiDependencyInjection
         services.AddSingleton<ApprovalStateStore>();
         services.AddSingleton<ToolApprovalService>();
         services.AddSingleton<KernelFactory>();
+        services.AddSingleton<GoogleKernelFactory>();
+        services.AddSingleton<ILLMProviderResolver, LLMProviderResolver>();
+        services.AddSingleton<IKernelFactory, ProviderKernelFactory>();
         services.AddSingleton<AgentMemoryStore>();
         services.AddScoped<ProductPlugin>();
         services.AddScoped<CartPlugin>();
@@ -56,7 +59,6 @@ public static class AgentApiDependencyInjection
 
         // ── LLM Layer (Singleton — OpenAILLMService reutiliza um IECommerceApi/HttpClient) ──
         services.AddSingleton<OpenAILLMService>();
-        services.AddSingleton<GoogleKernelFactory>();
         services.AddSingleton<GoogleLLMService>();
         services.AddSingleton<ILLMFactory, LLMFactory>();
 

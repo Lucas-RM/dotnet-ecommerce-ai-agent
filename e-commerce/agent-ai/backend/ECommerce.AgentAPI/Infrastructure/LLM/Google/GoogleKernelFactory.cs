@@ -13,7 +13,7 @@ namespace ECommerce.AgentAPI.Infrastructure.LLM.Google;
 /// por parâmetro e instancia filtros/plugins manualmente, evitando resolver serviços scoped a partir do root provider
 /// (o que dispararia <c>InvalidOperationException</c> "Cannot resolve scoped service ... from root provider.").
 /// </summary>
-public sealed class GoogleKernelFactory
+public sealed class GoogleKernelFactory : IKernelFactory
 {
     private readonly IConfiguration _configuration;
     private readonly ToolApprovalService _toolApproval;

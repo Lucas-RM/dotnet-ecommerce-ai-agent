@@ -10,7 +10,7 @@ namespace ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 /// <summary>
 /// Monta o <see cref="Microsoft.SemanticKernel.Kernel"/> com OpenAI (api.openai.com) e os plugins de e-commerce.
 /// </summary>
-public sealed class KernelFactory
+public sealed class KernelFactory : IKernelFactory
 {
     private readonly IConfiguration _configuration;
     private readonly ToolApprovalService _toolApproval;
@@ -19,6 +19,16 @@ public sealed class KernelFactory
     {
         _configuration = configuration;
         _toolApproval = toolApproval;
+    }
+
+    public Microsoft.SemanticKernel.Kernel CreateKernel(IECommerceApi ecommerceApi, string sessionId)
+    {
+        if (!Guid.TryParse(sessionId, out var parsedSessionId))
+        {
+            throw new ArgumentException("SessionId inválido.", nameof(sessionId));
+        }
+
+        return CreateKernel(ecommerceApi, parsedSessionId);
     }
 
     public Microsoft.SemanticKernel.Kernel CreateKernel(IECommerceApi ecommerceApi, Guid sessionId)

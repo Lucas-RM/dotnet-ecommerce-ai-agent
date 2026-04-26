@@ -2,7 +2,6 @@ using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Infrastructure.LLM.Google;
 using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ECommerce.AgentAPI.Infrastructure.LLM;
@@ -10,12 +9,12 @@ namespace ECommerce.AgentAPI.Infrastructure.LLM;
 public sealed class LLMFactory : ILLMFactory
 {
     private readonly IServiceProvider _sp;
-    private readonly IConfiguration _config;
+    private readonly ILLMProviderResolver _providerResolver;
 
-    public LLMFactory(IServiceProvider sp, IConfiguration config)
+    public LLMFactory(IServiceProvider sp, ILLMProviderResolver providerResolver)
     {
         _sp = sp;
-        _config = config;
+        _providerResolver = providerResolver;
     }
 
     public ILLMService Create(LLMProvider provider) =>
@@ -26,14 +25,5 @@ public sealed class LLMFactory : ILLMFactory
             _ => throw new NotSupportedException($"Provedor '{provider}' não suportado.")
         };
 
-    public ILLMService CreateFromConfig()
-    {
-        var s = _config["LLM:Provider"] ?? "OpenAI";
-        if (!Enum.TryParse<LLMProvider>(s, ignoreCase: true, out var p))
-        {
-            p = LLMProvider.OpenAI;
-        }
-
-        return Create(p);
-    }
+    public ILLMService CreateFromConfig() => Create(_providerResolver.Resolve());
 }

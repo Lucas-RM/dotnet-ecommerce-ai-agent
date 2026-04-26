@@ -5,7 +5,7 @@ using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Approval;
-using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
+using ECommerce.AgentAPI.Infrastructure.LLM;
 using Microsoft.SemanticKernel;
 using Refit;
 
@@ -13,12 +13,12 @@ namespace ECommerce.AgentAPI.Infrastructure.Tools;
 
 public sealed class ToolExecutorService : IToolExecutor
 {
-    private readonly KernelFactory _kernelFactory;
+    private readonly IKernelFactory _kernelFactory;
     private readonly IECommerceApi _eCommerceApi;
     private readonly ToolApprovalService _toolApproval;
 
     public ToolExecutorService(
-        KernelFactory kernelFactory,
+        IKernelFactory kernelFactory,
         IECommerceApi eCommerceApi,
         ToolApprovalService toolApproval)
     {
@@ -33,33 +33,15 @@ public sealed class ToolExecutorService : IToolExecutor
         CancellationToken cancellationToken = default)
     {
         _ = jwtToken;
-        if (string.IsNullOrWhiteSpace(toolCall.SessionId) || !Guid.TryParse(toolCall.SessionId, out var sessionId))
-        {
-            return new ToolExecutionResult
-            {
-                Success = false,
-                Output = string.Empty,
-                Error = "Sessão inválida.",
-                ToolName = toolCall.Name,
-                Data = null
-            };
-        }
+        if (string.IsNullOrWhiteSpace(toolCall.SessionId))
+            return FailResult(toolCall.Name, "Sessão inválida.");
 
         if (string.IsNullOrWhiteSpace(toolCall.Name))
-        {
-            return new ToolExecutionResult
-            {
-                Success = false,
-                Output = string.Empty,
-                Error = "Tool sem nome.",
-                ToolName = null,
-                Data = null
-            };
-        }
+            return FailResult(null, "Tool sem nome.");
 
         try
         {
-            var kernel = _kernelFactory.CreateKernel(_eCommerceApi, sessionId);
+            var kernel = _kernelFactory.CreateKernel(_eCommerceApi, toolCall.SessionId);
             if (_toolApproval.RequiresApproval(toolCall.Name))
             {
                 _toolApproval.PrepareApprovedExecution(kernel);
@@ -81,18 +63,33 @@ public sealed class ToolExecutorService : IToolExecutor
                 Data = data
             };
         }
+        catch (KeyNotFoundException)
+        {
+            return FailResult(toolCall.Name, "Não foi possível executar a ação solicitada. Tente de novo em instantes.");
+        }
+        catch (NotSupportedException)
+        {
+            return FailResult(toolCall.Name, "Serviço de IA indisponível. Tente de novo em instantes.");
+        }
+        catch (ArgumentException)
+        {
+            return FailResult(toolCall.Name, "Sessão inválida.");
+        }
         catch (Exception ex)
         {
-            return new ToolExecutionResult
-            {
-                Success = false,
-                Output = string.Empty,
-                Error = FormatECommerceToolError(ex),
-                ToolName = toolCall.Name,
-                Data = null
-            };
+            return FailResult(toolCall.Name, FormatECommerceToolError(ex));
         }
     }
+
+    private static ToolExecutionResult FailResult(string? toolName, string error) =>
+        new()
+        {
+            Success = false,
+            Output = string.Empty,
+            Error = error,
+            ToolName = toolName,
+            Data = null
+        };
 
     /// <summary>
     /// Desembrulha o envelope JSON devolvido pelos plugins. Aceita três formatos:
