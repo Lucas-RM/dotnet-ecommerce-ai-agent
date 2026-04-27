@@ -1,40 +1,45 @@
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.ECommerceClient.Dtos;
+using ECommerce.AgentAPI.Application.Tools;
+using ECommerce.AgentAPI.Infrastructure.Tools;
 using Microsoft.SemanticKernel;
 using Refit;
 using System.ComponentModel;
 
 namespace ECommerce.AgentAPI.Infrastructure.Tools.Plugins;
 
-public sealed class CartPlugin(IECommerceApi api)
+[ToolPlugin]
+public sealed class CartPlugin(ICartApi cartApi, IProductsApi productsApi)
 {
-    private readonly IECommerceApi _api = api;
+    private readonly ICartApi _cartApi = cartApi;
+    private readonly IProductsApi _productsApi = productsApi;
 
     [Description("Retorna o carrinho atual do usuário com todos os itens, quantidades e total.")]
     [KernelFunction("get_cart")]
     public async Task<string> GetCartAsync()
     {
-        var response = await _api.GetCartAsync();
+        var response = await _cartApi.GetCartAsync();
         return KernelJsonSerializer.Serialize(response);
     }
 
     [Description(
-        "Adiciona um produto ao carrinho do usuário. SEMPRE requer confirmação explícita antes de executar. SEMPRE chame search_products antes para obter o productId correto.")]
+        "Adiciona um produto ao carrinho. Requer confirmação pelo sistema após a chamada. " +
+        "Use o UUID (campo id) de search_products ou get_product. Não envie preço ou campos extra — o servidor resolve no catálogo.")]
     [KernelFunction("add_cart_item")]
     public async Task<string> AddCartItemAsync(
-        [Description("ID do produto a ser adicionado (obtido via search_products)")] string productId,
+        [Description("UUID do produto (campo id em search_products / get_product).")] string productId,
         [Description("Quantidade a adicionar (default 1)")] int quantity = 1)
     {
-        var id = await ProductIdResolver.TryResolveProductGuidAsync(_api, productId).ConfigureAwait(false);
+        var id = await ProductIdResolver.TryResolveProductGuidAsync(_productsApi, productId).ConfigureAwait(false);
         if (id is null)
         {
             return KernelJsonSerializer.Serialize(
-                new
-                { success = false, message = "Não encontrei esse produto na loja com segurança. Peça para eu listar opções e informe o nome completo do produto." });
+                ToolPluginEnvelopeFactory.Failure(
+                    "Não encontrei esse produto na loja com segurança. Peça para eu listar opções e informe o nome completo do produto."));
         }
 
         var dto = new AddCartItemDto(id.Value, quantity);
-        var response = await _api.AddCartItemAsync(dto);
+        var response = await _cartApi.AddCartItemAsync(dto);
         return KernelJsonSerializer.Serialize(response);
     }
 
@@ -47,19 +52,16 @@ public sealed class CartPlugin(IECommerceApi api)
         // Resolução estrita contra o carrinho: impede que um "2" (dígito vindo do LLM) vire "Produto 2"
         // via heurística de índice de catálogo. Se não der pra identificar o item dentro do carrinho atual,
         // devolvemos um envelope de erro para o LLM pedir get_cart e reconfirmar.
-        var resolved = await ProductIdResolver.TryResolveCartItemAsync(_api, productId).ConfigureAwait(false);
+        var resolved = await ProductIdResolver.TryResolveCartItemAsync(_cartApi, productId).ConfigureAwait(false);
         if (resolved is null)
         {
             return KernelJsonSerializer.Serialize(
-                new
-                {
-                    success = false,
-                    message = "Não consegui identificar esse item no carrinho com segurança. Peça para eu listar seu carrinho e informe o nome completo do produto (ex.: \"Produto Teste\")."
-                });
+                ToolPluginEnvelopeFactory.Failure(
+                    "Não consegui identificar esse item no carrinho com segurança. Peça para eu listar seu carrinho e informe o nome completo do produto (ex.: \"Produto Teste\")."));
         }
 
         var dto = new UpdateCartItemDto(quantity);
-        var response = await _api.UpdateCartItemAsync(resolved.Id, dto);
+        var response = await _cartApi.UpdateCartItemAsync(resolved.Id, dto);
         return KernelJsonSerializer.Serialize(response);
     }
 
@@ -68,18 +70,15 @@ public sealed class CartPlugin(IECommerceApi api)
     public async Task<string> RemoveCartItemAsync(
         [Description("UUID (campo 'id') do produto a remover")] string productId)
     {
-        var resolved = await ProductIdResolver.TryResolveCartItemAsync(_api, productId).ConfigureAwait(false);
+        var resolved = await ProductIdResolver.TryResolveCartItemAsync(_cartApi, productId).ConfigureAwait(false);
         if (resolved is null)
         {
             return KernelJsonSerializer.Serialize(
-                new
-                {
-                    success = false,
-                    message = "Não consegui identificar esse item no carrinho com segurança. Peça para eu listar seu carrinho e informe o nome completo do produto."
-                });
+                ToolPluginEnvelopeFactory.Failure(
+                    "Não consegui identificar esse item no carrinho com segurança. Peça para eu listar seu carrinho e informe o nome completo do produto."));
         }
 
-        var response = await _api.RemoveCartItemAsync(resolved.Id);
+        var response = await _cartApi.RemoveCartItemAsync(resolved.Id);
         return KernelJsonSerializer.Serialize(response);
     }
 
@@ -88,11 +87,15 @@ public sealed class CartPlugin(IECommerceApi api)
     [KernelFunction("clear_cart")]
     public async Task<string> ClearCartAsync()
     {
-        IApiResponse response = await _api.ClearCartAsync();
-        return KernelJsonSerializer.Serialize(new
+        IApiResponse response = await _cartApi.ClearCartAsync();
+        if (!response.IsSuccessStatusCode)
         {
-            success = response.IsSuccessStatusCode,
-            statusCode = (int)response.StatusCode
-        });
+            return KernelJsonSerializer.Serialize(
+                ToolPluginEnvelopeFactory.Failure(
+                    "Não foi possível esvaziar o carrinho agora. Tente novamente em instantes."));
+        }
+
+        return KernelJsonSerializer.Serialize(
+            ToolPluginEnvelopeFactory.Success(new ClearCartToolData((int)response.StatusCode)));
     }
 }

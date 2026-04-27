@@ -1,7 +1,8 @@
 using ECommerce.AgentAPI.ECommerceClient;
+using ECommerce.AgentAPI.Application.Tools;
+using ECommerce.AgentAPI.Domain.ValueObjects;
 using ECommerce.AgentAPI.Infrastructure.Approval;
 using Microsoft.Extensions.Configuration;
-using ECommerce.AgentAPI.Infrastructure.Tools.Plugins;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 
@@ -9,13 +10,14 @@ namespace ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 
 /// <summary>
 /// Monta o <see cref="Microsoft.SemanticKernel.Kernel"/> com OpenAI (api.openai.com) e os plugins de e-commerce.
+/// O nome alinha com a fábrica do Google (mesmo padrão por fornecedor).
 /// </summary>
-public sealed class KernelFactory : IKernelFactory
+public sealed class OpenAIKernelFactory : IKernelFactory
 {
     private readonly IConfiguration _configuration;
     private readonly ToolApprovalService _toolApproval;
 
-    public KernelFactory(IConfiguration configuration, ToolApprovalService toolApproval)
+    public OpenAIKernelFactory(IConfiguration configuration, ToolApprovalService toolApproval)
     {
         _configuration = configuration;
         _toolApproval = toolApproval;
@@ -47,13 +49,41 @@ public sealed class KernelFactory : IKernelFactory
         builder.Services.AddSingleton(_toolApproval);
         builder.Services.AddSingleton<IFunctionInvocationFilter, ApprovalFilter>();
 
-        builder.Plugins.AddFromObject(new ProductPlugin(ecommerceApi), nameof(ProductPlugin));
-        builder.Plugins.AddFromObject(new CartPlugin(ecommerceApi), nameof(CartPlugin));
-        builder.Plugins.AddFromObject(new OrderPlugin(ecommerceApi), nameof(OrderPlugin));
+        foreach (var pluginType in ToolRegistry.GetPluginTypes())
+        {
+            var plugin = CreatePluginInstance(pluginType, ecommerceApi);
+            builder.Plugins.AddFromObject(plugin, pluginType.Name);
+        }
 
         var kernel = builder.Build();
         kernel.Data[AgentKernelDataKeys.SessionId] = sessionId;
+        kernel.Data[AgentKernelDataKeys.AutomaticToolInvocations] = new List<RecordedToolInvocation>();
         return kernel;
+    }
+
+    private static object CreatePluginInstance(Type pluginType, IECommerceApi ecommerceApi)
+    {
+        var ctor = pluginType.GetConstructors()
+            .OrderByDescending(c => c.GetParameters().Length)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException($"Plugin '{pluginType.FullName}' sem construtor público.");
+
+        var args = ctor.GetParameters()
+            .Select(p => ResolvePluginDependency(p.ParameterType, ecommerceApi, pluginType))
+            .ToArray();
+
+        var instance = Activator.CreateInstance(pluginType, args);
+        return instance ?? throw new InvalidOperationException(
+            $"Não foi possível instanciar o plugin '{pluginType.FullName}'.");
+    }
+
+    private static object ResolvePluginDependency(Type dependencyType, IECommerceApi ecommerceApi, Type pluginType)
+    {
+        if (dependencyType.IsInstanceOfType(ecommerceApi))
+            return ecommerceApi;
+
+        throw new InvalidOperationException(
+            $"Plugin '{pluginType.FullName}' possui dependência não suportada no construtor: '{dependencyType.FullName}'.");
     }
 
     public OpenAIPromptExecutionSettings CreatePromptExecutionSettings() =>

@@ -1,16 +1,15 @@
 using System.Text.Json;
+using ECommerce.AgentAPI.Application.Tools.Payloads.V1;
+using ECommerce.AgentAPI.Application.Tools.Serialization;
+using ECommerce.AgentAPI.Application.Tools.Shared;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Tools.Catalog;
+namespace ECommerce.AgentAPI.Application.Tools.Capabilities.Cart;
 
-/// <summary>
-/// <c>update_cart_item</c> — altera a quantidade de um item do carrinho. Exige aprovação; a mensagem
-/// inclui rótulo do produto e a nova quantidade. Envelope mostra o total atualizado.
-/// Execução em <c>CartPlugin.UpdateCartItemAsync</c>.
-/// </summary>
 public sealed class UpdateCartItemTool : ITool
 {
     public string Name => "update_cart_item";
+    public string DataType => "Cart";
 
     public bool RequiresApproval => true;
 
@@ -28,13 +27,14 @@ public sealed class UpdateCartItemTool : ITool
 
     public ChatEnvelope BuildEnvelope(JsonElement? data)
     {
-        var total = EnvelopeJson.GetDecimal(data, "totalPrice");
-        var intro = $"Quantidade atualizada. Total do carrinho: {EnvelopeJson.FormatMoney(total)}.";
+        var c = ToolPayloadJson.Deserialize<CartDataV1>(data);
+        var total = c?.TotalPrice;
+        var intro = $"Quantidade atualizada. Total do carrinho: {ToolEnvelopeText.FormatMoney(total)}.";
         return new ChatEnvelope(
             IntroMessage: intro,
             OutroMessage: "Posso ajudar com mais alguma coisa?",
             ToolName: Name,
-            DataType: "Cart",
+            DataType: DataType,
             Data: data);
     }
 }

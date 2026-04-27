@@ -7,4 +7,6 @@ public sealed class ToolCall
     public Dictionary<string, object> Arguments { get; set; } = new();
 
     public string SessionId { get; set; } = string.Empty;
+
+    public string? CorrelationId { get; set; }
 }

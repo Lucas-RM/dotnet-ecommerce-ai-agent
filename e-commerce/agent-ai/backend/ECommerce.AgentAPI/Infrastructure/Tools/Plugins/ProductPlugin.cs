@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using ECommerce.AgentAPI.Application.Tools;
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.ECommerceClient.Dtos;
 using ECommerce.AgentAPI.Infrastructure.Tools;
@@ -6,9 +7,10 @@ using Microsoft.SemanticKernel;
 
 namespace ECommerce.AgentAPI.Infrastructure.Tools.Plugins;
 
-public sealed class ProductPlugin(IECommerceApi api)
+[ToolPlugin]
+public sealed class ProductPlugin(IProductsApi api)
 {
-    private readonly IECommerceApi _api = api;
+    private readonly IProductsApi _api = api;
 
     [Description(
         "Busca ou lista produtos da loja. Com search e category vazios, lista a página de produtos (paginado). " +
@@ -45,7 +47,8 @@ public sealed class ProductPlugin(IECommerceApi api)
         if (id is null)
         {
             return KernelJsonSerializer.Serialize(
-                new { success = false, message = "Não encontrei esse produto. Faça uma busca na loja e escolha um item da lista." });
+                ToolPluginEnvelopeFactory.Failure(
+                    "Não encontrei esse produto. Faça uma busca na loja e escolha um item da lista."));
         }
 
         var response = await _api.GetProductByIdAsync(id.Value);

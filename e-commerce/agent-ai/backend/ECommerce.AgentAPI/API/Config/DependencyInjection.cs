@@ -11,12 +11,14 @@ using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.API.Middleware;
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Approval;
+using ECommerce.AgentAPI.Infrastructure.Approval.Capabilities.Cart;
 using ECommerce.AgentAPI.Infrastructure.ErrorHandling;
 using ECommerce.AgentAPI.Infrastructure.LLM;
 using ECommerce.AgentAPI.Infrastructure.LLM.Google;
 using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 using ECommerce.AgentAPI.Infrastructure.Memory;
 using ECommerce.AgentAPI.Infrastructure.Tools;
+using ECommerce.AgentAPI.Infrastructure.Observability;
 using ECommerce.AgentAPI.Infrastructure.Tools.Plugins;
 using ECommerce.AgentAPI.Models;
 using FluentValidation;
@@ -41,11 +43,12 @@ public static class AgentApiDependencyInjection
     {
         // ── Catálogo de ITool (uma tool, uma classe) — fonte canónica de approval/envelope para tools migradas ──
         services.AddToolCatalog(typeof(AgentApiDependencyInjection).Assembly);
+        services.AddHostedService<ToolContractValidationHostedService>();
 
-        // ── Aprovação, Kernel, plugins SK (instâncias também criadas em KernelFactory; registo alinha evolução / testes) ──
+        // ── Aprovação, Kernel, plugins SK (instâncias também criadas em OpenAIKernelFactory; registo alinha evolução / testes) ──
         services.AddSingleton<ApprovalStateStore>();
         services.AddSingleton<ToolApprovalService>();
-        services.AddSingleton<KernelFactory>();
+        services.AddSingleton<OpenAIKernelFactory>();
         services.AddSingleton<GoogleKernelFactory>();
         services.AddSingleton<ILLMProviderResolver, LLMProviderResolver>();
         services.AddSingleton<IKernelFactory, ProviderKernelFactory>();
@@ -70,6 +73,8 @@ public static class AgentApiDependencyInjection
         // ── Pré-resolução de produto antes da aprovação: a pergunta ao usuário passa a refletir
         //    o item canônico (nome, preço, UUID), não o palpite cru do LLM. Depende de IECommerceApi,
         //    por isso scoped — segue a mesma lifetime dos plugins do SK.
+        services.AddScoped<IToolApprovalArgumentEnrichmentStrategy, AddCartItemApprovalEnrichmentStrategy>();
+        services.AddScoped<IToolApprovalArgumentEnrichmentStrategy, CartItemApprovalEnrichmentStrategy>();
         services.AddScoped<IApprovalArgumentEnricher, ApprovalArgumentEnricher>();
 
         // ── Memória: volátil (padrão) com AgentMemoryStore ou Redis (multi-instância) ──
@@ -88,6 +93,8 @@ public static class AgentApiDependencyInjection
         }
 
         services.Configure<AgentOptions>(configuration.GetSection(AgentOptions.SectionName));
+        services.Configure<AgentObservabilityOptions>(configuration.GetSection(AgentObservabilityOptions.SectionName));
+        services.AddSingleton<IAgentObservability, AgentObservability>();
         services.AddSingleton<IChatErrorHandler, HttpChatErrorHandler>();
         services.AddScoped<IToolExecutor, ToolExecutorService>();
         services.AddScoped<ProcessUserMessageUseCase>();
@@ -135,6 +142,8 @@ public static class AgentApiDependencyInjection
                     }));
             });
         });
+
+        services.AddAgentRuntimeHardening(configuration);
 
         return services;
     }

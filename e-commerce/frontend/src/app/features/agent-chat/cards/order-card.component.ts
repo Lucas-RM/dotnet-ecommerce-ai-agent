@@ -18,7 +18,7 @@ import { OrderDto } from '../dtos';
       <div class="card card--wide">
         <header class="card-head">
           <div class="head-left">
-            <span class="order-id" [attr.title]="data.id">#{{ shortId(data.id) }}</span>
+            <span class="order-id" [attr.title]="data.id">#{{ data.id }}</span>
             <span class="order-date">{{ data.placedAt | date : 'short' }}</span>
           </div>
           <div class="head-right">
@@ -82,8 +82,9 @@ import { OrderDto } from '../dtos';
       .order-id {
         font-family: 'Consolas', 'Segoe UI Mono', ui-monospace, monospace;
         font-weight: 700;
-        font-size: 0.88rem;
+        font-size: 0.82rem;
         color: #0d47a1;
+        word-break: break-all;
       }
       .order-date {
         font-size: 0.82rem;
@@ -134,9 +135,4 @@ import { OrderDto } from '../dtos';
 })
 export class OrderCardComponent {
   @Input() data: OrderDto | null = null;
-
-  /** Exibe apenas o prefixo curto do GUID para manter o cabeçalho limpo. */
-  shortId(id: string): string {
-    return id?.length > 8 ? `${id.slice(0, 8)}…` : id;
-  }
 }

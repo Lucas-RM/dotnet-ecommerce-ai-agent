@@ -1,11 +1,14 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using ECommerce.AgentAPI.Application.Capabilities;
 using ECommerce.AgentAPI.Domain.Entities;
 using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.LLM;
+using ECommerce.AgentAPI.Application.Abstractions;
 using Microsoft.SemanticKernel;
 using Refit;
 
@@ -16,15 +19,18 @@ public sealed class ToolExecutorService : IToolExecutor
     private readonly IKernelFactory _kernelFactory;
     private readonly IECommerceApi _eCommerceApi;
     private readonly ToolApprovalService _toolApproval;
+    private readonly IAgentObservability _observability;
 
     public ToolExecutorService(
         IKernelFactory kernelFactory,
         IECommerceApi eCommerceApi,
-        ToolApprovalService toolApproval)
+        ToolApprovalService toolApproval,
+        IAgentObservability observability)
     {
         _kernelFactory = kernelFactory;
         _eCommerceApi = eCommerceApi;
         _toolApproval = toolApproval;
+        _observability = observability;
     }
 
     public async Task<ToolExecutionResult> ExecuteAsync(
@@ -39,21 +45,37 @@ public sealed class ToolExecutorService : IToolExecutor
         if (string.IsNullOrWhiteSpace(toolCall.Name))
             return FailResult(null, "Tool sem nome.");
 
+        var name = toolCall.Name ?? string.Empty;
+        var cap = ToolCapabilityResolver.Resolve(name);
+        var sw = Stopwatch.StartNew();
+        using var toolActivity = _observability.StartToolActivity(
+            name,
+            toolCall.SessionId,
+            toolCall.CorrelationId);
         try
         {
             var kernel = _kernelFactory.CreateKernel(_eCommerceApi, toolCall.SessionId);
-            if (_toolApproval.RequiresApproval(toolCall.Name))
+            if (_toolApproval.RequiresApproval(name))
             {
                 _toolApproval.PrepareApprovedExecution(kernel);
             }
 
-            var fn = ResolveKernelFunction(kernel, toolCall.Name);
+            var fn = ResolveKernelFunction(kernel, name);
             var args = ToKernelArguments(toolCall.Arguments);
             var result = await fn
                 .InvokeAsync(kernel, args, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             var text = result.GetValue<string>() ?? result.ToString() ?? string.Empty;
-            var (success, data, envelopeError) = UnwrapEnvelope(text);
+            var (success, data, envelopeError) = PluginEnvelopeUnwrapper.Unwrap(text);
+            sw.Stop();
+            _observability.RecordToolDuration(
+                name,
+                cap,
+                sw.Elapsed,
+                success,
+                !success
+                    ? "plugin_envelope"
+                    : null);
             return new ToolExecutionResult
             {
                 Success = success,
@@ -65,20 +87,54 @@ public sealed class ToolExecutorService : IToolExecutor
         }
         catch (KeyNotFoundException)
         {
-            return FailResult(toolCall.Name, "Não foi possível executar a ação solicitada. Tente de novo em instantes.");
+            return FailWithObs(
+                sw,
+                name,
+                cap,
+                "not_found",
+                "Não foi possível executar a ação solicitada. Tente de novo em instantes.");
         }
         catch (NotSupportedException)
         {
-            return FailResult(toolCall.Name, "Serviço de IA indisponível. Tente de novo em instantes.");
+            return FailWithObs(
+                sw,
+                name,
+                cap,
+                "llm_unavailable",
+                "Serviço de IA indisponível. Tente de novo em instantes.");
         }
         catch (ArgumentException)
         {
-            return FailResult(toolCall.Name, "Sessão inválida.");
+            return FailWithObs(
+                sw,
+                name,
+                cap,
+                "session_invalid",
+                "Sessão inválida.");
         }
         catch (Exception ex)
         {
-            return FailResult(toolCall.Name, FormatECommerceToolError(ex));
+            var code = ex is ApiException a ? "api_" + (int)a.StatusCode : "internal";
+            return FailWithObs(
+                sw,
+                name,
+                cap,
+                code,
+                FormatECommerceToolError(ex));
         }
+    }
+
+    private ToolExecutionResult FailWithObs(
+        Stopwatch sw,
+        string name,
+        AgentCapability cap,
+        string errorKind,
+        string userMessage)
+    {
+        if (sw.IsRunning)
+            sw.Stop();
+        _observability.RecordToolDuration(name, cap, sw.Elapsed, false, errorKind);
+        return FailResult(name, userMessage);
     }
 
     private static ToolExecutionResult FailResult(string? toolName, string error) =>
@@ -90,78 +146,6 @@ public sealed class ToolExecutorService : IToolExecutor
             ToolName = toolName,
             Data = null
         };
-
-    /// <summary>
-    /// Desembrulha o envelope JSON devolvido pelos plugins. Aceita três formatos:
-    /// 1. Envelope padrão <c>ECommerceApiResponse{T}</c> → <c>{ success, data, message, errors }</c>;
-    /// 2. Envelope ad-hoc dos plugins para erros locais → <c>{ success: false, message }</c>;
-    /// 3. JSON cru (sem envelope) → devolvido como está em <c>Data</c>.
-    /// Para não JSON (texto livre), devolve <c>Data = null</c> e <c>Success = true</c>.
-    /// </summary>
-    private static (bool Success, JsonElement? Data, string? Error) UnwrapEnvelope(string json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return (true, null, null);
-        }
-
-        JsonDocument? doc = null;
-        try
-        {
-            doc = JsonDocument.Parse(json);
-        }
-        catch (JsonException)
-        {
-            return (true, null, null);
-        }
-
-        using (doc)
-        {
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return (true, root.Clone(), null);
-            }
-
-            var hasSuccess = root.TryGetProperty("success", out var successEl)
-                             && successEl.ValueKind is JsonValueKind.True or JsonValueKind.False;
-            if (!hasSuccess)
-            {
-                return (true, root.Clone(), null);
-            }
-
-            var success = successEl.GetBoolean();
-            string? error = null;
-
-            if (!success)
-            {
-                if (root.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String)
-                {
-                    error = msgEl.GetString();
-                }
-
-                if (string.IsNullOrWhiteSpace(error)
-                    && root.TryGetProperty("errors", out var errsEl)
-                    && errsEl.ValueKind == JsonValueKind.Array)
-                {
-                    var first = errsEl.EnumerateArray()
-                        .FirstOrDefault(e => e.ValueKind == JsonValueKind.String);
-                    if (first.ValueKind == JsonValueKind.String)
-                    {
-                        error = first.GetString();
-                    }
-                }
-            }
-
-            JsonElement? data = null;
-            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind != JsonValueKind.Null)
-            {
-                data = dataEl.Clone();
-            }
-
-            return (success, data, error);
-        }
-    }
 
     private static string FormatECommerceToolError(Exception ex)
     {

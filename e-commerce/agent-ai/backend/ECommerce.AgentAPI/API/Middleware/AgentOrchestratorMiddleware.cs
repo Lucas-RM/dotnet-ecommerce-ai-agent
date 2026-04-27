@@ -1,4 +1,5 @@
 using System.Globalization;
+using ECommerce.AgentAPI.Application.Abstractions;
 using ECommerce.AgentAPI.Application.DTOs;
 using ECommerce.AgentAPI.Application.UseCases;
 using ECommerce.AgentAPI.Models;
@@ -19,44 +20,66 @@ public sealed class AgentOrchestratorMiddleware
     private readonly IHttpContextAccessor _httpContext;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AgentOrchestratorMiddleware> _logger;
+    private readonly IAgentObservability _observability;
 
     public AgentOrchestratorMiddleware(
         ProcessUserMessageUseCase useCase,
         IHttpContextAccessor httpContext,
         IConfiguration configuration,
-        ILogger<AgentOrchestratorMiddleware> logger)
+        ILogger<AgentOrchestratorMiddleware> logger,
+        IAgentObservability observability)
     {
         _useCase = useCase;
         _httpContext = httpContext;
         _configuration = configuration;
         _logger = logger;
+        _observability = observability;
     }
 
     public async Task<IResult> InvokeAsync(ChatRequest request, CancellationToken cancellationToken = default)
     {
         _ = BearerTokenProvider.TryGetFromRequest(_httpContext.HttpContext?.Request, out var jwt);
         var token = jwt ?? string.Empty;
+        var correlationId = ResolveCorrelationId(request);
 
         var command = new ProcessMessageCommand
         {
             SessionId = request.SessionId.ToString("D", CultureInfo.InvariantCulture),
             Message = request.Message,
-            JwtToken = token
+            JwtToken = token,
+            ClientVersion = request.ClientVersion,
+            Locale = request.Locale,
+            Channel = request.Channel,
+            Metadata = request.Metadata,
+            CorrelationId = correlationId
         };
 
-        try
+        using (var _ = _observability.StartChatRequestActivity(command))
         {
-            var result = await _useCase
-                .ExecuteAsync(command, cancellationToken)
-                .ConfigureAwait(false);
-            EnrichLlmProvider(result.Response);
-            return Results.Json(result.Response, statusCode: result.StatusCode);
+            try
+            {
+                var result = await _useCase
+                    .ExecuteAsync(command, cancellationToken)
+                    .ConfigureAwait(false);
+                EnrichLlmProvider(result.Response);
+                EnrichCorrelation(result.Response, correlationId);
+                return Results.Json(result.Response, statusCode: result.StatusCode);
+            }
+            catch (OperationCanceledException ex)
+            {
+                _logger.LogDebug(ex, "Operação de chat interrompida (cancelamento/timeout).");
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
         }
-        catch (OperationCanceledException ex)
-        {
-            _logger.LogDebug(ex, "Operação de chat interrompida (cancelamento/timeout).");
-            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-        }
+    }
+
+    private string ResolveCorrelationId(ChatRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.CorrelationId))
+            return request.CorrelationId!;
+
+        return _httpContext.HttpContext?.TraceIdentifier
+               ?? Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture);
     }
 
     private void EnrichLlmProvider(ChatResponse? response)
@@ -76,5 +99,13 @@ public sealed class AgentOrchestratorMiddleware
         {
             response.LlmProvider = "openai";
         }
+    }
+
+    private static void EnrichCorrelation(ChatResponse? response, string correlationId)
+    {
+        if (response is null)
+            return;
+
+        response.CorrelationId = correlationId;
     }
 }

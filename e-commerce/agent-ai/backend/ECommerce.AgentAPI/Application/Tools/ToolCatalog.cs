@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ECommerce.AgentAPI.Domain.ValueObjects;
+using ECommerce.AgentAPI.Application.Abstractions;
 
 namespace ECommerce.AgentAPI.Application.Tools;
 
@@ -12,10 +13,20 @@ namespace ECommerce.AgentAPI.Application.Tools;
 public sealed class ToolCatalog
 {
     private readonly IReadOnlyDictionary<string, ITool> _byName;
+    private readonly ToolEnvelopeSchemaValidator _envelopeSchemaValidator;
+    private readonly ILogger<ToolCatalog> _logger;
+    private readonly IAgentObservability _observability;
 
-    public ToolCatalog(IEnumerable<ITool> tools)
+    public ToolCatalog(
+        IEnumerable<ITool> tools,
+        ToolEnvelopeSchemaValidator envelopeSchemaValidator,
+        ILogger<ToolCatalog> logger,
+        IAgentObservability observability)
     {
         ArgumentNullException.ThrowIfNull(tools);
+        _envelopeSchemaValidator = envelopeSchemaValidator;
+        _logger = logger;
+        _observability = observability;
         _byName = tools
             .GroupBy(t => t.Name, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
@@ -25,6 +36,8 @@ public sealed class ToolCatalog
         !string.IsNullOrEmpty(name) && _byName.TryGetValue(name, out var t) ? t : null;
 
     public bool Contains(string name) => Get(name) is not null;
+
+    public IReadOnlyCollection<ITool> GetAll() => _byName.Values.ToArray();
 
     public bool RequiresApproval(string name) => Get(name)?.RequiresApproval ?? false;
 
@@ -51,7 +64,25 @@ public sealed class ToolCatalog
     {
         var tool = Get(name);
         if (tool is not null)
-            return tool.BuildEnvelope(data);
+        {
+            var envelope = tool.BuildEnvelope(data);
+            if (_envelopeSchemaValidator.TryValidate(envelope, out var validationError))
+                return envelope;
+
+            _logger.LogWarning(
+                "Envelope inválido para tool '{ToolName}' (dataType '{DataType}'): {ValidationError}",
+                name,
+                envelope.DataType,
+                validationError);
+            _observability.RecordEnvelopeInvalid(
+                name,
+                envelope.DataType,
+                validationError);
+
+            return ChatEnvelope.TextOnly(
+                "Não consegui montar a resposta estruturada desta ação com segurança.",
+                "Tente novamente ou peça a mesma ação em outro formato.");
+        }
 
         return new ChatEnvelope(
             IntroMessage: null,

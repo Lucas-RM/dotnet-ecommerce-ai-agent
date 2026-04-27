@@ -4,6 +4,7 @@ using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Approval;
+using ECommerce.AgentAPI.Infrastructure.LLM;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Google;
@@ -83,6 +84,7 @@ public sealed class GoogleLLMService : ILLMService
                 Text = null,
                 HasToolCall = true,
                 ToolCall = ToToolCall(p, key),
+                RecordedToolExecutions = Array.Empty<RecordedToolInvocation>(),
                 FinishReason = "tool_calls"
             };
         }
@@ -98,6 +100,7 @@ public sealed class GoogleLLMService : ILLMService
         {
             Text = text,
             HasToolCall = false,
+            RecordedToolExecutions = KernelAutomaticToolListReader.ReadFromKernel(kernel),
             FinishReason = "stop"
         };
     }

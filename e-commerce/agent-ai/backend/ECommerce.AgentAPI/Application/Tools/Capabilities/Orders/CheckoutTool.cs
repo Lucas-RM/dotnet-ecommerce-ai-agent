@@ -1,17 +1,16 @@
 using System.Text.Json;
+using ECommerce.AgentAPI.Application.Tools.Payloads.V1;
+using ECommerce.AgentAPI.Application.Tools.Serialization;
+using ECommerce.AgentAPI.Application.Tools.Shared;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Tools.Catalog;
+namespace ECommerce.AgentAPI.Application.Tools.Capabilities.Orders;
 
-/// <summary>
-/// <c>checkout</c> — finaliza o pedido a partir do carrinho atual. Ação irreversível, exige
-/// confirmação explícita. Quando o LLM sintetiza <c>totalAmount</c> nos argumentos, a mensagem
-/// mostra o valor; senão, cai num texto genérico.
-/// Execução em <c>OrderPlugin.CheckoutAsync</c> (<c>[KernelFunction("checkout")]</c>).
-/// </summary>
+/// <summary><c>checkout</c> — <c>OrderPlugin.CheckoutAsync</c>. Domínio <b>pedidos</b> / fecho.</summary>
 public sealed class CheckoutTool : ITool
 {
     public string Name => "checkout";
+    public string DataType => "Order";
 
     public bool RequiresApproval => true;
 
@@ -28,13 +27,14 @@ public sealed class CheckoutTool : ITool
 
     public ChatEnvelope BuildEnvelope(JsonElement? data)
     {
-        var total = EnvelopeJson.GetDecimal(data, "totalAmount");
-        var intro = $"Pedido concluído! Total: {EnvelopeJson.FormatMoney(total)}.";
+        var o = ToolPayloadJson.Deserialize<OrderDataV1>(data);
+        var total = o?.TotalAmount;
+        var intro = $"Pedido concluído! Total: {ToolEnvelopeText.FormatMoney(total)}.";
         return new ChatEnvelope(
             IntroMessage: intro,
             OutroMessage: "Obrigado pela compra! Posso buscar novos produtos?",
             ToolName: Name,
-            DataType: "Order",
+            DataType: DataType,
             Data: data);
     }
 }

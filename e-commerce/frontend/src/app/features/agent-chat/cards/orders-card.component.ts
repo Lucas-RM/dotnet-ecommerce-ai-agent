@@ -28,7 +28,7 @@ import { PagedOrdersDto } from '../dtos';
           <tbody>
             @for (o of data.items; track o.id) {
               <tr>
-                <td class="order-id" [attr.title]="o.id">{{ shortId(o.id) }}</td>
+                <td class="order-id" [attr.title]="o.id">{{ o.id }}</td>
                 <td>{{ o.placedAt | date : 'short' }}</td>
                 <td>
                   <span class="status-pill">{{ o.status }}</span>
@@ -92,8 +92,10 @@ import { PagedOrdersDto } from '../dtos';
       }
       .order-id {
         font-family: 'Consolas', 'Segoe UI Mono', ui-monospace, monospace;
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         color: #1565c0;
+        word-break: break-all;
+        max-width: 280px;
       }
       .status-pill {
         font-size: 0.72rem;
@@ -115,9 +117,4 @@ import { PagedOrdersDto } from '../dtos';
 })
 export class OrdersCardComponent {
   @Input() data: PagedOrdersDto | null = null;
-
-  /** Exibe apenas o prefixo curto do GUID para caber na coluna sem poluir a tabela. */
-  shortId(id: string): string {
-    return id?.length > 8 ? `${id.slice(0, 8)}…` : id;
-  }
 }

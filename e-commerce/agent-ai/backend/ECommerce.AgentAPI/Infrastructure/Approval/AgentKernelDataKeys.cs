@@ -11,4 +11,7 @@ public static class AgentKernelDataKeys
     /// (ex.: após confirmação explícita no middleware).
     /// </summary>
     public const string SkipApprovalOnce = "Agent.SkipApprovalOnce";
+
+    /// <summary>Lista a preencher durante a auto-invocation do SK (uma entrada por <c>KernelFunction</c> executada).</summary>
+    public const string AutomaticToolInvocations = "Agent.AutomaticToolInvocations";
 }

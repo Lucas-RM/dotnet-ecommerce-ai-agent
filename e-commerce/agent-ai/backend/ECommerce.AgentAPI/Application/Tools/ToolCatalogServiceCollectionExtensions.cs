@@ -27,6 +27,7 @@ public static class ToolCatalogServiceCollectionExtensions
             }
         }
 
+        services.AddSingleton<ToolEnvelopeSchemaValidator>();
         services.AddSingleton<ToolCatalog>();
         return services;
     }

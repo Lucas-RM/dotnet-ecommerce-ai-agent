@@ -4,6 +4,7 @@ using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Approval;
+using ECommerce.AgentAPI.Infrastructure.LLM;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using SkChat = Microsoft.SemanticKernel.ChatCompletion;
@@ -12,13 +13,13 @@ namespace ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 
 public sealed class OpenAILLMService : ILLMService
 {
-    private readonly KernelFactory _kernelFactory;
+    private readonly OpenAIKernelFactory _kernelFactory;
     private readonly IECommerceApi _eCommerceApi;
     private readonly ToolApprovalService _toolApproval;
     private readonly ILogger<OpenAILLMService> _logger;
 
     public OpenAILLMService(
-        KernelFactory kernelFactory,
+        OpenAIKernelFactory kernelFactory,
         IECommerceApi eCommerceApi,
         ToolApprovalService toolApproval,
         ILogger<OpenAILLMService> logger)
@@ -76,6 +77,7 @@ public sealed class OpenAILLMService : ILLMService
                 Text = null,
                 HasToolCall = true,
                 ToolCall = ToToolCall(p, key),
+                RecordedToolExecutions = Array.Empty<RecordedToolInvocation>(),
                 FinishReason = "tool_calls"
             };
         }
@@ -91,6 +93,7 @@ public sealed class OpenAILLMService : ILLMService
         {
             Text = text,
             HasToolCall = false,
+            RecordedToolExecutions = KernelAutomaticToolListReader.ReadFromKernel(kernel),
             FinishReason = "stop"
         };
     }

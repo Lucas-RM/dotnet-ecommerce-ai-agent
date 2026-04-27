@@ -1,13 +1,9 @@
 using System.Text.Json;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Tools.Catalog;
+namespace ECommerce.AgentAPI.Application.Tools.Capabilities.Cart;
 
-/// <summary>
-/// <c>clear_cart</c> — ação irreversível, sem parâmetros nem dados de retorno apresentáveis.
-/// Concentra aqui: política de aprovação, texto de confirmação e envelope final da UI.
-/// A execução efetiva continua em <c>CartPlugin.ClearCartAsync</c> (<c>[KernelFunction("clear_cart")]</c>).
-/// </summary>
+/// <summary>Domínio <b>carrinho</b>. <c>clear_cart</c> em <c>CartPlugin.ClearCartAsync</c>.</summary>
 public sealed class ClearCartTool : ITool
 {
     public string Name => "clear_cart";

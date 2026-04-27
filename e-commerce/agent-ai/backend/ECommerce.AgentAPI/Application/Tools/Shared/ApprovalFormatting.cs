@@ -1,13 +1,12 @@
 using System.Globalization;
 
-namespace ECommerce.AgentAPI.Application.Tools.Catalog;
+namespace ECommerce.AgentAPI.Application.Tools.Shared;
 
 /// <summary>
 /// Helpers de renderização para as mensagens de aprovação das <see cref="ITool"/>.
 /// Centraliza a leitura defensiva de <c>KernelArguments</c>/<c>ToolCall.Arguments</c> — que podem
 /// trazer <c>productName</c>/<c>unitPrice</c>/<c>totalAmount</c> sintetizados pelo LLM mesmo sem
 /// estarem declarados no <c>[KernelFunction]</c> — e a escolha de um rótulo amigável do produto.
-/// Mantido <c>internal</c> porque só interessa às implementações de <see cref="ITool"/> deste assembly.
 /// </summary>
 internal static class ApprovalFormatting
 {
@@ -29,10 +28,6 @@ internal static class ApprovalFormatting
         return Convert.ToString(o, CultureInfo.InvariantCulture)?.Trim() ?? string.Empty;
     }
 
-    /// <summary>
-    /// Escolhe um rótulo legível para um produto a partir de <c>productName</c> / <c>productId</c>.
-    /// O LLM pode mandar ambos; quando só há Guid, devolve "o produto selecionado na busca".
-    /// </summary>
     public static string ResolveProductLabel(IReadOnlyDictionary<string, object?> args)
     {
         var pn = Norm(ArgStr(args, "productName"));
@@ -61,11 +56,57 @@ internal static class ApprovalFormatting
         display = string.Empty;
         if (!args.TryGetValue("unitPrice", out var o) || o is null)
             return false;
-        var raw = Convert.ToString(o, CultureInfo.InvariantCulture)?.Trim() ?? string.Empty;
-        if (string.IsNullOrEmpty(raw) || IsPlaceholderPrice(raw))
+
+        if (!TryCoerceToDecimal(o, out var amount))
             return false;
-        display = raw;
+
+        display = ToolEnvelopeText.FormatMoney(amount);
         return true;
+    }
+
+    /// <summary>Interpreta <c>unitPrice</c> vindo do enriquecimento (decimal) ou texto numérico.</summary>
+    private static bool TryCoerceToDecimal(object o, out decimal? amount)
+    {
+        amount = null;
+        switch (o)
+        {
+            case decimal d:
+                amount = d;
+                break;
+            case double x:
+                amount = (decimal)x;
+                break;
+            case float x:
+                amount = (decimal)x;
+                break;
+            case int x:
+                amount = x;
+                break;
+            case long x:
+                amount = x;
+                break;
+            default:
+            {
+                var raw = Convert.ToString(o, CultureInfo.InvariantCulture)?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(raw) || IsPlaceholderPrice(raw))
+                    return false;
+                if (decimal.TryParse(raw, NumberStyles.Number, PtBr, out var p))
+                {
+                    amount = p;
+                    break;
+                }
+
+                if (decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var inv))
+                {
+                    amount = inv;
+                    break;
+                }
+
+                return false;
+            }
+        }
+
+        return amount.HasValue;
     }
 
     public static bool TryGetTotalAmountDisplay(IReadOnlyDictionary<string, object?> args, out string display)

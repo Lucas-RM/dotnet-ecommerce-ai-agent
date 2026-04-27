@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using ECommerce.AgentAPI.Application.Abstractions;
 using ECommerce.AgentAPI.Application.Agents;
+using ECommerce.AgentAPI.Application.Capabilities;
 using ECommerce.AgentAPI.Application.DTOs;
 using ECommerce.AgentAPI.Application.Options;
 using ECommerce.AgentAPI.Application.Tools;
@@ -9,6 +11,7 @@ using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.Formatting;
+using ECommerce.AgentAPI.Infrastructure.Tools;
 using ECommerce.AgentAPI.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
@@ -37,6 +40,7 @@ public sealed class ProcessUserMessageUseCase
     private readonly IChatErrorHandler _errorHandler;
     private readonly ToolCatalog _catalog;
     private readonly IApprovalArgumentEnricher _approvalEnricher;
+    private readonly IAgentObservability _observability;
 
     public ProcessUserMessageUseCase(
         ILLMFactory llmFactory,
@@ -46,7 +50,8 @@ public sealed class ProcessUserMessageUseCase
         IOptions<AgentOptions> options,
         IChatErrorHandler errorHandler,
         ToolCatalog catalog,
-        IApprovalArgumentEnricher approvalEnricher)
+        IApprovalArgumentEnricher approvalEnricher,
+        IAgentObservability observability)
     {
         _llmFactory = llmFactory;
         _tools = tools;
@@ -56,6 +61,7 @@ public sealed class ProcessUserMessageUseCase
         _errorHandler = errorHandler;
         _catalog = catalog;
         _approvalEnricher = approvalEnricher;
+        _observability = observability;
     }
 
     public async Task<ChatProcessResult> ExecuteAsync(
@@ -90,20 +96,43 @@ public sealed class ProcessUserMessageUseCase
             await PersistUserMessageAsync(sessionId, command.Message).ConfigureAwait(false);
 
             var classification = _approval.ClassifyUserResponse(command.Message);
-            return classification switch
+            var cap = ToolCapabilityResolver.Resolve(existing.ToolCall.Name);
+            switch (classification)
             {
-                ApprovalClassification.Confirmed => await ExecuteApprovedToolAsync(existing, command, cancellationToken)
-                    .ConfigureAwait(false),
-                ApprovalClassification.Denied => await CancelPendingAsync(sessionId).ConfigureAwait(false),
-                _ => AmbiguousApprovalResult()
-            };
+                case ApprovalClassification.Confirmed:
+                    _observability.RecordApproval("confirmed", existing.ToolCall.Name, cap);
+                    _observability.AddChatSummaryTags(
+                        sessionId,
+                        command.CorrelationId,
+                        "approval_confirmed");
+                    return await ExecuteApprovedToolAsync(
+                            existing,
+                            command,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                case ApprovalClassification.Denied:
+                    _observability.RecordApproval("denied", existing.ToolCall.Name, cap);
+                    _observability.AddChatSummaryTags(
+                        sessionId,
+                        command.CorrelationId,
+                        "approval_cancelled");
+                    return await CancelPendingAsync(sessionId).ConfigureAwait(false);
+                default:
+                    _observability.RecordApproval("ambiguous", existing.ToolCall.Name, cap);
+                    _observability.AddChatSummaryTags(
+                        sessionId,
+                        command.CorrelationId,
+                        "approval_ambiguous");
+                    return AmbiguousApprovalResult();
+            }
         }
 
-        _ = await _memory.GetHistoryAsync(sessionId).ConfigureAwait(false);
         var llm = _llmFactory.CreateFromConfig();
 
         await PersistUserMessageAsync(sessionId, command.Message).ConfigureAwait(false);
 
+        using var llmActivity = _observability.StartLlmActivity(sessionId, command.CorrelationId);
+        var sw = Stopwatch.StartNew();
         var response = await llm
             .GenerateAsync(
                 new LLMRequest
@@ -111,46 +140,152 @@ public sealed class ProcessUserMessageUseCase
                     SessionId = sessionId,
                     Input = command.Message,
                     History = await _memory.GetHistoryAsync(sessionId).ConfigureAwait(false),
-                    Tools = [.. ToolRegistry.GetDefinitions()],
+                    Tools = [.. ToolContractComposer.Compose(_catalog)],
                     SystemPrompt = AgentSystemPrompt.Text,
                     Temperature = 0.3f,
                     MaxTokens = 1024
                 },
                 cancellationToken)
             .ConfigureAwait(false);
+        sw.Stop();
 
         if (response.HasToolCall && response.ToolCall is not null)
         {
             var call = response.ToolCall;
             call.SessionId = sessionId;
+            call.CorrelationId = command.CorrelationId;
+            var name = call.Name ?? string.Empty;
+            var cap = ToolCapabilityResolver.Resolve(name);
 
-            if (_approval.RequiresApproval(call.Name))
+            if (_approval.RequiresApproval(name))
             {
-                // Pré-resolve o produto (quando aplicável) antes de pedir aprovação: garante que o
-                // texto da pergunta ("Deseja atualizar X para N?") corresponda exatamente ao item
-                // que será tocado. Se a resolução falhar, interrompemos o fluxo aqui mesmo — o
-                // usuário recebe um texto amigável e nada fica pendente para "sim/não".
                 var enrichment = await _approvalEnricher
-                    .EnrichAsync(call.Name ?? string.Empty, call.Arguments, cancellationToken)
+                    .EnrichAsync(name, call.Arguments, cancellationToken)
                     .ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(enrichment.Error))
                 {
+                    _observability.RecordLlmDuration(
+                        sw.Elapsed,
+                        "enrichment_error",
+                        name,
+                        cap);
+                    _observability.AddChatSummaryTags(
+                        sessionId,
+                        command.CorrelationId,
+                        "enrichment_error");
                     await PersistAssistantReplyAsync(sessionId, enrichment.Error).ConfigureAwait(false);
                     await PruneHistoryAsync(sessionId).ConfigureAwait(false);
                     return Ok(BuildResponse(ChatEnvelope.TextOnly(enrichment.Error)));
                 }
 
                 call.Arguments = enrichment.Arguments;
+                _observability.RecordLlmDuration(
+                    sw.Elapsed,
+                    "approval_pending",
+                    name,
+                    cap);
+                _observability.RecordApproval("requested", name, cap);
+                _observability.AddChatSummaryTags(sessionId, command.CorrelationId, "approval_pending");
                 return await RequestApprovalAsync(sessionId, call).ConfigureAwait(false);
             }
 
+            _observability.RecordLlmDuration(
+                sw.Elapsed,
+                "tool_invocation",
+                name,
+                cap);
             var executionResult = await _tools
                 .ExecuteAsync(call, command.JwtToken ?? string.Empty, cancellationToken)
                 .ConfigureAwait(false);
+            _observability.AddChatSummaryTags(
+                sessionId,
+                command.CorrelationId,
+                executionResult.Success ? "tool_ok" : "tool_error");
             return await HandleToolResultAsync(sessionId, call, executionResult).ConfigureAwait(false);
         }
 
+        if (!response.HasToolCall
+            && response.RecordedToolExecutions.Count > 0)
+        {
+            var lastName = response.RecordedToolExecutions[^1].FunctionName ?? string.Empty;
+            _observability.RecordLlmDuration(
+                sw.Elapsed,
+                "kernel_auto_envelope",
+                string.IsNullOrEmpty(lastName) ? null : lastName,
+                ToolCapabilityResolver.Resolve(lastName));
+            _observability.AddChatSummaryTags(
+                sessionId,
+                command.CorrelationId,
+                "kernel_envelope");
+            return await HandleKernelAutoToolEnvelopesAsync(sessionId, response)
+                .ConfigureAwait(false);
+        }
+
+        _observability.RecordLlmDuration(
+            sw.Elapsed,
+            "text",
+            null,
+            AgentCapability.None);
+        _observability.AddChatSummaryTags(sessionId, command.CorrelationId, "text");
         return await HandleLlmTextResponseAsync(sessionId, response.Text).ConfigureAwait(false);
+    }
+
+    private async Task<ChatProcessResult> HandleKernelAutoToolEnvelopesAsync(
+        string sessionId,
+        LLMResponse response)
+    {
+        var last = response.RecordedToolExecutions[^1];
+        var name = last.FunctionName ?? string.Empty;
+        var (success, data, envelopeError) = PluginEnvelopeUnwrapper.Unwrap(last.RawResult);
+        if (!success)
+        {
+            var err = string.IsNullOrEmpty(envelopeError) ? DefaultToolErrorMessage : envelopeError;
+            await PersistAssistantReplyAsync(sessionId, err).ConfigureAwait(false);
+            return Ok(BuildResponse(ChatEnvelope.TextOnly(err)));
+        }
+
+        var envelope = _catalog.BuildEnvelope(name, data);
+        var merged = ShouldAppendKernelLlmProseToEnvelope(envelope)
+            ? MergeLlmProseIntoEnvelopeIfAny(envelope, response.Text)
+            : envelope;
+        await PersistAssistantReplyAsync(sessionId, JoinIntroOutro(merged)).ConfigureAwait(false);
+        await PruneHistoryAsync(sessionId).ConfigureAwait(false);
+        return Ok(BuildResponse(merged));
+    }
+
+    /// <summary>
+    /// Com auto-invocation no Kernel, o modelo ainda gera prosa; para envelopes com
+    /// <c>DataType</c>+payload, essa prosa reitera os mesmos factos (ex.: tabela de carrinho no
+    /// card + lista numerada do LLM). Manter só o <see cref="ITool" />.
+    /// </summary>
+    private static bool ShouldAppendKernelLlmProseToEnvelope(ChatEnvelope envelope) =>
+        string.IsNullOrWhiteSpace(envelope.DataType) || envelope.Data is null;
+
+    private static ChatEnvelope MergeLlmProseIntoEnvelopeIfAny(
+        ChatEnvelope envelope,
+        string? modelProse)
+    {
+        if (string.IsNullOrWhiteSpace(modelProse))
+        {
+            return envelope;
+        }
+
+        var t = AssistantOutputGuard.EnsureUserFacing(
+            AssistantReplyFormatter.ToUserFriendly(modelProse));
+        if (string.IsNullOrWhiteSpace(t))
+        {
+            return envelope;
+        }
+
+        if (string.IsNullOrWhiteSpace(envelope.OutroMessage))
+        {
+            return envelope with { OutroMessage = t };
+        }
+
+        return envelope with
+        {
+            OutroMessage = envelope.OutroMessage.Trim() + "\n\n" + t
+        };
     }
 
     private async Task<ChatProcessResult> RequestApprovalAsync(string sessionId, ToolCall call)
@@ -210,6 +345,7 @@ public sealed class ProcessUserMessageUseCase
         await _approval.ClearPendingAsync(sessionId).ConfigureAwait(false);
 
         pending.ToolCall.SessionId = sessionId;
+        pending.ToolCall.CorrelationId = command.CorrelationId;
         var executionResult = await _tools
             .ExecuteAsync(pending.ToolCall, command.JwtToken ?? string.Empty, cancellationToken)
             .ConfigureAwait(false);

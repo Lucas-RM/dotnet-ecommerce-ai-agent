@@ -98,6 +98,8 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
         outroMessage: res.outroMessage,
         tool: res.tool,
         data: res.data,
+        details: res.details ?? null,
+        metadata: res.metadata ?? null,
         requiresApproval: res.requiresApproval
       }
     ];

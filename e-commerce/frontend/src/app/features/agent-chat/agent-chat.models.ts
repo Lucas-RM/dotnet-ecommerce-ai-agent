@@ -1,20 +1,15 @@
+import { ChatDataType } from './chat-contract';
+
 /** Corpo de POST /api/agent/chat (alinhado ao backend). */
 export interface ChatRequest {
   sessionId: string;
   message: string;
+  clientVersion?: string;
+  locale?: string;
+  channel?: string;
+  metadata?: Record<string, unknown>;
+  correlationId?: string;
 }
-
-/**
- * Tipos lógicos de dado reconhecidos pelo registry de cards do chat.
- * Adicionar tool nova = adicionar literal aqui + entrada em `CHAT_CARD_REGISTRY`.
- */
-export type ChatDataType =
-  | 'PagedProducts'
-  | 'Product'
-  | 'Cart'
-  | 'CartItem'
-  | 'PagedOrders'
-  | 'Order';
 
 /** Identifica a tool executada na resposta e o `dataType` lógico para escolher o card visual. */
 export interface ChatToolInfo {
@@ -33,9 +28,13 @@ export interface ChatResponse {
   outroMessage: string | null;
   tool: ChatToolInfo | null;
   data: unknown | null;
+  details?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   requiresApproval: boolean;
   /** Provedor ativo no Agent (`openai` | `google`), quando o backend expõe. */
   llmProvider?: string | null;
+  correlationId?: string | null;
+  contractVersion?: string | null;
 }
 
 /**
@@ -56,5 +55,9 @@ export interface AgentChatMessage {
   tool?: ChatToolInfo | null;
   /** Payload estruturado da tool; cada `dataType` mapeia para um DTO em `./dtos`. */
   data?: unknown | null;
+  /** Payload opcional para extensões futuras sem quebrar histórico. */
+  details?: Record<string, unknown> | null;
+  /** Metadados opcionais de observabilidade/contrato. */
+  metadata?: Record<string, unknown> | null;
   requiresApproval?: boolean;
 }

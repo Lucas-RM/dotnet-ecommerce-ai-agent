@@ -5,7 +5,9 @@ namespace ECommerce.AgentAPI.Models;
 
 /// <summary>
 /// Resposta do Agent ao cliente de chat (ex.: widget Angular).
-/// Contrato padronizado em três blocos: <c>introMessage</c> → <c>data</c> → <c>outroMessage</c>.
+/// Contrato em três blocos: <c>introMessage</c> → <c>data</c> → <c>outroMessage</c>.
+/// Regras de evolução/deprecação: ver documento do repositório em
+/// <c>docs/chat-response-compatibility.md</c> (ISSUE-06).
 /// </summary>
 public sealed class ChatResponse
 {
@@ -31,4 +33,10 @@ public sealed class ChatResponse
     /// <summary>Provedor LLM ativo (appsettings <c>LLM:Provider</c>), p.ex. <c>openai</c> ou <c>google</c>.</summary>
     [JsonPropertyName("llmProvider")]
     public string? LlmProvider { get; set; }
+
+    [JsonPropertyName("correlationId")]
+    public string? CorrelationId { get; set; }
+
+    [JsonPropertyName("contractVersion")]
+    public string ContractVersion { get; set; } = ChatContractVersion.Current;
 }

@@ -23,12 +23,14 @@ public sealed class ApprovalFilter(ToolApprovalService toolApproval) : IFunction
         if (!toolApproval.RequiresApproval(functionName))
         {
             await next(context).ConfigureAwait(false);
+            AutomaticToolInvocationRecorder.AppendIfPossible(context);
             return;
         }
 
         if (TryConsumeSkipApprovalOnce(context.Kernel))
         {
             await next(context).ConfigureAwait(false);
+            AutomaticToolInvocationRecorder.AppendIfPossible(context);
             return;
         }
 

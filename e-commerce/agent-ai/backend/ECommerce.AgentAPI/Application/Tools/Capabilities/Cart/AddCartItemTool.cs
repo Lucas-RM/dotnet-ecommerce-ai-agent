@@ -1,17 +1,19 @@
 using System.Text.Json;
+using ECommerce.AgentAPI.Application.Tools.Payloads.V1;
+using ECommerce.AgentAPI.Application.Tools.Serialization;
+using ECommerce.AgentAPI.Application.Tools.Shared;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Tools.Catalog;
+namespace ECommerce.AgentAPI.Application.Tools.Capabilities.Cart;
 
 /// <summary>
-/// <c>add_cart_item</c> — adiciona produto ao carrinho. Exige aprovação: a mensagem enriquece
-/// com <c>quantity</c>, <c>productName</c> e, quando o LLM sintetiza <c>unitPrice</c>, o valor
-/// unitário. Envelope mostra o total atualizado após a confirmação.
-/// Execução em <c>CartPlugin.AddCartItemAsync</c>.
+/// <c>add_cart_item</c> — domínio <b>carrinho</b>. Aprovação e envelope pós-adição. Execução em
+/// <c>CartPlugin.AddCartItemAsync</c>.
 /// </summary>
 public sealed class AddCartItemTool : ITool
 {
     public string Name => "add_cart_item";
+    public string DataType => "Cart";
 
     public bool RequiresApproval => true;
 
@@ -24,7 +26,7 @@ public sealed class AddCartItemTool : ITool
         {
             return string.Format(
                 ApprovalFormatting.Culture,
-                "Deseja adicionar **{0}** unidade(s) de **{1}** (R$ {2}) ao seu carrinho?",
+                "Deseja adicionar **{0}** unidade(s) de **{1}** ({2}) ao seu carrinho?",
                 qty,
                 label,
                 price);
@@ -39,13 +41,14 @@ public sealed class AddCartItemTool : ITool
 
     public ChatEnvelope BuildEnvelope(JsonElement? data)
     {
-        var total = EnvelopeJson.GetDecimal(data, "totalPrice");
-        var intro = $"Adicionado ao carrinho! Total atualizado: {EnvelopeJson.FormatMoney(total)}.";
+        var c = ToolPayloadJson.Deserialize<CartDataV1>(data);
+        var total = c?.TotalPrice;
+        var intro = $"Adicionado ao carrinho! Total atualizado: {ToolEnvelopeText.FormatMoney(total)}.";
         return new ChatEnvelope(
             IntroMessage: intro,
             OutroMessage: "Quer continuar comprando ou finalizar o pedido?",
             ToolName: Name,
-            DataType: "Cart",
+            DataType: DataType,
             Data: data);
     }
 }

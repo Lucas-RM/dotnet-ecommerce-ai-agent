@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Reflection;
 using ECommerce.AgentAPI.Domain.ValueObjects;
-using ECommerce.AgentAPI.Infrastructure.Tools.Plugins;
 using Microsoft.SemanticKernel;
 
 namespace ECommerce.AgentAPI.Application.Tools;
@@ -14,20 +13,18 @@ namespace ECommerce.AgentAPI.Application.Tools;
 /// </summary>
 public static class ToolRegistry
 {
-    private static readonly Type[] PluginTypes =
-    [
-        typeof(ProductPlugin),
-        typeof(CartPlugin),
-        typeof(OrderPlugin)
-    ];
+    private static readonly Lazy<IReadOnlyList<Type>> CachedPluginTypes =
+        new(DiscoverPluginTypes, LazyThreadSafetyMode.ExecutionAndPublication);
 
     private static readonly Lazy<IReadOnlyList<ToolDefinition>> Cached =
         new(BuildDefinitions, LazyThreadSafetyMode.ExecutionAndPublication);
 
+    public static IReadOnlyList<Type> GetPluginTypes() => CachedPluginTypes.Value;
+
     public static IReadOnlyList<ToolDefinition> GetDefinitions() => Cached.Value;
 
     private static IReadOnlyList<ToolDefinition> BuildDefinitions() =>
-        PluginTypes
+        GetPluginTypes()
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             .Select(method => (Method: method, Attr: method.GetCustomAttribute<KernelFunctionAttribute>()))
             .Where(x => x.Attr is not null)
@@ -42,6 +39,33 @@ public static class ToolRegistry
             })
             .OrderBy(d => d.Name, StringComparer.Ordinal)
             .ToList();
+
+    private static IReadOnlyList<Type> DiscoverPluginTypes()
+    {
+        var assembly = typeof(ToolRegistry).Assembly;
+        return assembly
+            .GetTypes()
+            .Where(IsPluginType)
+            .OrderBy(type => type.Name, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static bool IsPluginType(Type type)
+    {
+        if (type is not { IsClass: true, IsAbstract: false })
+            return false;
+
+        var hasKernelFunctions = type
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Any(m => m.GetCustomAttribute<KernelFunctionAttribute>() is not null);
+        if (!hasKernelFunctions)
+            return false;
+
+        if (type.GetCustomAttribute<ToolPluginAttribute>() is not null)
+            return true;
+
+        return type.Name.EndsWith("Plugin", StringComparison.Ordinal);
+    }
 
     private static string ResolveFunctionName(MethodInfo method, KernelFunctionAttribute attr) =>
         !string.IsNullOrWhiteSpace(attr.Name)

@@ -60,6 +60,11 @@ public static class ECommerceApiClient
             .AddPolicyHandler(CreateCircuitBreakerPolicy())
             .AddPolicyHandler(CreateRetryPolicy(retryCount));
 
+        services.AddScoped<IProductsApi>(sp => sp.GetRequiredService<IECommerceApi>());
+        services.AddScoped<ICartApi>(sp => sp.GetRequiredService<IECommerceApi>());
+        services.AddScoped<IOrdersApi>(sp => sp.GetRequiredService<IECommerceApi>());
+        services.AddScoped<ICheckoutApi>(sp => sp.GetRequiredService<IECommerceApi>());
+
         return services;
     }
 

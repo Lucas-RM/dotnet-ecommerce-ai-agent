@@ -14,3 +14,4 @@ export { CartCardComponent } from './cart-card.component';
 export { CartItemCardComponent } from './cart-item-card.component';
 export { OrdersCardComponent } from './orders-card.component';
 export { OrderCardComponent } from './order-card.component';
+export { UnknownDataCardComponent } from './unknown-data-card.component';

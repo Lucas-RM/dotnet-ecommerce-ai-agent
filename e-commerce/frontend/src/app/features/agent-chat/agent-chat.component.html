@@ -43,11 +43,13 @@
                   [innerHTML]="m.introMessage | chatReplyHtml"
                 ></div>
               }
-              @if (m.tool?.dataType && m.data) {
+              @if (m.tool?.dataType) {
                 <app-chat-data-card
                   class="bubble-card"
                   [dataType]="m.tool!.dataType!"
                   [data]="m.data"
+                  [details]="m.details ?? null"
+                  [metadata]="m.metadata ?? null"
                 />
               }
               @if (m.outroMessage) {

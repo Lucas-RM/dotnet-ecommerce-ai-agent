@@ -7,8 +7,9 @@ import {
   Type
 } from '@angular/core';
 import { CommonModule, NgComponentOutlet } from '@angular/common';
-import { ChatDataType } from '../agent-chat.models';
+import { ChatDataType, isKnownChatDataType } from '../chat-contract';
 import { CHAT_CARD_REGISTRY } from './card-registry';
+import { UnknownDataCardComponent } from './unknown-data-card.component';
 
 /**
  * Dispatcher genérico dos cards do agent-chat.
@@ -19,8 +20,8 @@ import { CHAT_CARD_REGISTRY } from './card-registry';
  * nome via `ngComponentOutletInputs` e cada card faz seu casting interno.
  *
  * Se o `dataType` for desconhecido (ex.: payload antigo persistido em
- * sessionStorage após atualização de backend), o componente não renderiza
- * nada — a UI continua legível via intro/outro.
+ * sessionStorage após atualização de backend), renderiza um fallback seguro
+ * para manter contexto e facilitar diagnóstico técnico.
  */
 @Component({
   standalone: true,
@@ -39,6 +40,8 @@ import { CHAT_CARD_REGISTRY } from './card-registry';
 export class ChatDataCardComponent implements OnChanges {
   @Input() dataType: ChatDataType | null = null;
   @Input() data: unknown = null;
+  @Input() details: Record<string, unknown> | null = null;
+  @Input() metadata: Record<string, unknown> | null = null;
 
   component: Type<unknown> | null = null;
   inputs: Record<string, unknown> = {};
@@ -48,7 +51,12 @@ export class ChatDataCardComponent implements OnChanges {
       this.component = this.resolveComponent(this.dataType);
     }
     if ('data' in changes || 'dataType' in changes) {
-      this.inputs = { data: this.data };
+      this.inputs = {
+        data: this.data,
+        dataType: this.dataType,
+        details: this.details,
+        metadata: this.metadata
+      };
     }
   }
 
@@ -56,6 +64,10 @@ export class ChatDataCardComponent implements OnChanges {
     if (!dataType) {
       return null;
     }
-    return CHAT_CARD_REGISTRY[dataType] ?? null;
+    if (!isKnownChatDataType(dataType)) {
+      return UnknownDataCardComponent;
+    }
+
+    return CHAT_CARD_REGISTRY[dataType];
   }
 }

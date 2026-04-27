@@ -2,12 +2,17 @@ using ECommerce.AgentAPI.API.Filters;
 using ECommerce.AgentAPI.API.Middleware;
 using ECommerce.AgentAPI.Models;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http.Timeouts;
 
 namespace ECommerce.AgentAPI.API.Endpoints;
 
 public static class ChatEndpoint
 {
-    public static void Map(WebApplication app, string chatRateLimitPolicy) =>
+    public static void Map(WebApplication app, string chatRateLimitPolicy)
+    {
+        var timeoutSec = app.Configuration.GetValue("Agent:Hosting:ChatRequestTimeoutSeconds", 120);
+        var chatTimeout = TimeSpan.FromSeconds(timeoutSec);
+
         app.MapPost(
                 "/api/agent/chat",
                 (
@@ -15,7 +20,10 @@ public static class ChatEndpoint
                     AgentOrchestratorMiddleware orchestrator,
                     CancellationToken cancellationToken) =>
                     orchestrator.InvokeAsync(request, cancellationToken))
+            .AddEndpointFilter<ChatEndpointAvailabilityFilter>()
+            .AddEndpointFilter<ChatRequestValidationFilter>()
+            .WithRequestTimeout(chatTimeout)
             .RequireAuthorization()
-            .RequireRateLimiting(chatRateLimitPolicy)
-            .AddEndpointFilter<ChatRequestValidationFilter>();
+            .RequireRateLimiting(chatRateLimitPolicy);
+    }
 }

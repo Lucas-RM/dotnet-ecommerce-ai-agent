@@ -1,19 +1,19 @@
 using System.Text.Json;
+using ECommerce.AgentAPI.Application.Tools.Payloads.V1;
+using ECommerce.AgentAPI.Application.Tools.Serialization;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Tools.Catalog;
+namespace ECommerce.AgentAPI.Application.Tools.Capabilities.Orders;
 
-/// <summary>
-/// <c>get_order</c> — detalhes de um pedido. Sem aprovação; envelope opcionalmente inclui o status
-/// no intro. Execução em <c>OrderPlugin.GetOrderByIdAsync</c>.
-/// </summary>
 public sealed class GetOrderTool : ITool
 {
     public string Name => "get_order";
+    public string DataType => "Order";
 
     public ChatEnvelope BuildEnvelope(JsonElement? data)
     {
-        var status = EnvelopeJson.GetString(data, "status");
+        var o = ToolPayloadJson.Deserialize<OrderDataV1>(data);
+        var status = o?.Status;
         var intro = string.IsNullOrWhiteSpace(status)
             ? "Detalhes do pedido:"
             : $"Detalhes do pedido (status: **{status}**):";
@@ -21,7 +21,7 @@ public sealed class GetOrderTool : ITool
             IntroMessage: intro,
             OutroMessage: "Posso ajudar com mais alguma coisa?",
             ToolName: Name,
-            DataType: "Order",
+            DataType: DataType,
             Data: data);
     }
 }

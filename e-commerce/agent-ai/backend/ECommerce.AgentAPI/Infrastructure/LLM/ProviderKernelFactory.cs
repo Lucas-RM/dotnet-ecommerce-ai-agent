@@ -7,12 +7,12 @@ namespace ECommerce.AgentAPI.Infrastructure.LLM;
 public sealed class ProviderKernelFactory : IKernelFactory
 {
     private readonly ILLMProviderResolver _providerResolver;
-    private readonly KernelFactory _openAiKernelFactory;
+    private readonly OpenAIKernelFactory _openAiKernelFactory;
     private readonly GoogleKernelFactory _googleKernelFactory;
 
     public ProviderKernelFactory(
         ILLMProviderResolver providerResolver,
-        KernelFactory openAiKernelFactory,
+        OpenAIKernelFactory openAiKernelFactory,
         GoogleKernelFactory googleKernelFactory)
     {
         _providerResolver = providerResolver;

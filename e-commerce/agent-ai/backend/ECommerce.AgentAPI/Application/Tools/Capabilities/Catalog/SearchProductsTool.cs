@@ -1,21 +1,24 @@
 using System.Text.Json;
+using ECommerce.AgentAPI.Application.Tools.Payloads.V1;
+using ECommerce.AgentAPI.Application.Tools.Serialization;
 using ECommerce.AgentAPI.Domain.ValueObjects;
 
-namespace ECommerce.AgentAPI.Application.Tools.Catalog;
+namespace ECommerce.AgentAPI.Application.Tools.Capabilities.Catalog;
 
 /// <summary>
-/// <c>search_products</c> — listagem paginada / busca de produtos da loja. Sem aprovação; envelope
-/// escolhe o intro conforme total vs. itens mostrados (e trata o caso "sem resultados" com texto
-/// e outro dedicados). Execução em <c>ProductPlugin.SearchProductsAsync</c>.
+/// <c>search_products</c> — domínio <b>catálogo</b>. Listagem / busca de produtos. Execução em
+/// <c>ProductPlugin.SearchProductsAsync</c>.
 /// </summary>
 public sealed class SearchProductsTool : ITool
 {
     public string Name => "search_products";
+    public string DataType => "PagedProducts";
 
     public ChatEnvelope BuildEnvelope(JsonElement? data)
     {
-        var total = EnvelopeJson.GetInt(data, "totalCount") ?? 0;
-        var shown = EnvelopeJson.ArrayLength(data, "items");
+        var p = ToolPayloadJson.Deserialize<PagedListDataV1>(data);
+        var total = p?.TotalCount ?? 0;
+        var shown = p?.Items?.Count ?? ToolPayloadJson.ArrayLength(data, "items");
 
         if (total == 0 || shown == 0)
         {
@@ -23,7 +26,7 @@ public sealed class SearchProductsTool : ITool
                 IntroMessage: "Não encontrei produtos com esse filtro.",
                 OutroMessage: "Quer tentar outro termo ou categoria?",
                 ToolName: Name,
-                DataType: "PagedProducts",
+                DataType: DataType,
                 Data: data);
         }
 
@@ -34,7 +37,7 @@ public sealed class SearchProductsTool : ITool
             IntroMessage: intro,
             OutroMessage: "Quer ver detalhes de algum ou adicionar ao carrinho?",
             ToolName: Name,
-            DataType: "PagedProducts",
+            DataType: DataType,
             Data: data);
     }
 }

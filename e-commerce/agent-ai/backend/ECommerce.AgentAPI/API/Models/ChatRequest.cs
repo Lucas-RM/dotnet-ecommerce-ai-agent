@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace ECommerce.AgentAPI.Models;
 
@@ -10,4 +11,19 @@ public sealed class ChatRequest
 
     [JsonPropertyName("message")]
     public string Message { get; set; } = string.Empty;
+
+    [JsonPropertyName("clientVersion")]
+    public string? ClientVersion { get; set; }
+
+    [JsonPropertyName("locale")]
+    public string? Locale { get; set; }
+
+    [JsonPropertyName("channel")]
+    public string? Channel { get; set; }
+
+    [JsonPropertyName("metadata")]
+    public JsonElement? Metadata { get; set; }
+
+    [JsonPropertyName("correlationId")]
+    public string? CorrelationId { get; set; }
 }

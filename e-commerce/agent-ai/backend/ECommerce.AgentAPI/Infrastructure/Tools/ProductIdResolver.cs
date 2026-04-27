@@ -29,7 +29,7 @@ internal static class ProductIdResolver
     private const int MaxPageSize = 50;
 
     public static async Task<Guid?> TryResolveProductGuidAsync(
-        IECommerceApi api,
+        IProductsApi productsApi,
         string? raw,
         CancellationToken cancellationToken = default)
     {
@@ -41,7 +41,7 @@ internal static class ProductIdResolver
         var t = raw.Trim();
         if (Guid.TryParse(t, out var g))
         {
-            if (await ProductExistsAsync(api, g, cancellationToken).ConfigureAwait(false))
+            if (await ProductExistsAsync(productsApi, g, cancellationToken).ConfigureAwait(false))
             {
                 return g;
             }
@@ -50,14 +50,14 @@ internal static class ProductIdResolver
 
         if (TryGetCatalogIndex(t) is { } n)
         {
-            var fromCatalog = await MatchProdutoNAsync(api, n, cancellationToken).ConfigureAwait(false);
+            var fromCatalog = await MatchProdutoNAsync(productsApi, n, cancellationToken).ConfigureAwait(false);
             if (fromCatalog is not null)
             {
                 return fromCatalog;
             }
         }
 
-        var r = await api
+        var r = await productsApi
             .GetProductsAsync(new ProductQueryParams(1, MaxPageSize, null, t))
             .ConfigureAwait(false);
         var items = r.Data?.Items;
@@ -106,11 +106,11 @@ internal static class ProductIdResolver
         return null;
     }
 
-    private static async Task<bool> ProductExistsAsync(IECommerceApi api, Guid id, CancellationToken cancellationToken)
+    private static async Task<bool> ProductExistsAsync(IProductsApi productsApi, Guid id, CancellationToken cancellationToken)
     {
         try
         {
-            var r = await api
+            var r = await productsApi
                 .GetProductByIdAsync(id)
                 .ConfigureAwait(false);
             return r is { Success: true, Data: not null };
@@ -121,7 +121,7 @@ internal static class ProductIdResolver
         }
     }
 
-    private static async Task<Guid?> MatchProdutoNAsync(IECommerceApi api, string numberPart, CancellationToken cancellationToken)
+    private static async Task<Guid?> MatchProdutoNAsync(IProductsApi productsApi, string numberPart, CancellationToken cancellationToken)
     {
         _ = cancellationToken;
         if (string.IsNullOrEmpty(numberPart))
@@ -131,7 +131,7 @@ internal static class ProductIdResolver
 
         var want = $"Produto {numberPart}";
         // Preferir o nome exato no termo de busca (Contains) em vez de só o dígito, para reduzir colisões.
-        var r = await api
+        var r = await productsApi
             .GetProductsAsync(new ProductQueryParams(1, MaxPageSize, null, want))
             .ConfigureAwait(false);
         return r.Data?.Items?
@@ -146,7 +146,7 @@ internal static class ProductIdResolver
     /// que o chamador possa pedir ao LLM uma nova consulta via <c>get_cart</c>.
     /// </summary>
     public static async Task<ResolvedProduct?> TryResolveCartItemAsync(
-        IECommerceApi api,
+        ICartApi cartApi,
         string? raw,
         CancellationToken cancellationToken = default)
     {
@@ -156,7 +156,7 @@ internal static class ProductIdResolver
             return null;
         }
 
-        var cart = await api.GetCartAsync().ConfigureAwait(false);
+        var cart = await cartApi.GetCartAsync().ConfigureAwait(false);
         var items = cart?.Data?.Items;
         if (items is not { Count: > 0 })
         {
@@ -195,11 +195,11 @@ internal static class ProductIdResolver
     /// consulta <c>get_product</c> para obter os atributos textuais.
     /// </summary>
     public static async Task<ResolvedProduct?> TryResolveCatalogProductAsync(
-        IECommerceApi api,
+        IProductsApi productsApi,
         string? raw,
         CancellationToken cancellationToken = default)
     {
-        var id = await TryResolveProductGuidAsync(api, raw, cancellationToken).ConfigureAwait(false);
+        var id = await TryResolveProductGuidAsync(productsApi, raw, cancellationToken).ConfigureAwait(false);
         if (id is null)
         {
             return null;
@@ -207,7 +207,7 @@ internal static class ProductIdResolver
 
         try
         {
-            var r = await api.GetProductByIdAsync(id.Value).ConfigureAwait(false);
+            var r = await productsApi.GetProductByIdAsync(id.Value).ConfigureAwait(false);
             var p = r?.Data;
             if (p is null)
             {
