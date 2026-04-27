@@ -7,6 +7,15 @@
       <div class="widget-header-left">
         <span class="widget-icon" aria-hidden="true">💬</span>
         <span class="widget-title">Chat</span>
+        <button
+          mat-stroked-button
+          type="button"
+          class="new-conversation-btn"
+          (click)="startNewConversation()"
+          [disabled]="sending"
+        >
+          Nova conversa
+        </button>
         @if (activeLlmProvider) {
           <span
             class="llm-pill"

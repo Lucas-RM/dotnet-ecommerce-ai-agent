@@ -72,6 +72,29 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
     }
   }
 
+  startNewConversation(): void {
+    if (this.sending) {
+      return;
+    }
+    this.agentChat.newConversation().subscribe({
+      next: () => {
+        this.messages = [];
+        this.activeLlmProvider = null;
+        this.queueScrollBottom();
+      },
+      error: (err: unknown) => {
+        this.messages = [];
+        this.activeLlmProvider = null;
+        this.queueScrollBottom();
+        this.snack.open(
+          getApiErrorMessage(err, 'A conversa foi reiniciada localmente; o servidor pode ainda reter a sessão anterior.'),
+          'Fechar',
+          { duration: 6000 }
+        );
+      }
+    });
+  }
+
   private appendUserAndPostMessage(text: string): void {
     this.messages = [...this.messages, { role: 'user', text }];
     this.persistMessages();

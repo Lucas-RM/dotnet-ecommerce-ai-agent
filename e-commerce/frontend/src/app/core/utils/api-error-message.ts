@@ -67,6 +67,9 @@ export function getApiErrorMessage(err: unknown, fallback = 'Não foi possível 
     if (err.status === 404) return 'Recurso não encontrado.';
     if (err.status === 401) return 'Não autorizado. Verifique suas credenciais.';
     if (err.status === 403) return 'Você não tem permissão para esta ação.';
+    if (err.status === 429) {
+      return 'Muitas mensagens no último minuto; aguarde e tente de novo.';
+    }
     if (err.status >= 500) return 'Ocorreu um erro no servidor. Tente novamente.';
     return fallback;
   }

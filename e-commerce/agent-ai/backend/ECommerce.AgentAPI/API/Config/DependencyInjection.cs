@@ -36,7 +36,7 @@ namespace ECommerce.AgentAPI.API.Config;
 /// <summary>Registos de DI (secção 7 — ecommerce-agent-evolution.yaml): Auth, LLM, plugins, aprovação, memória, Refit+Polly, orquestração.</summary>
 public static class AgentApiDependencyInjection
 {
-    /// <summary>Política de rate limit usada em <c>POST /api/agent/chat</c> (30 req/min por <c>sub</c> do JWT).</summary>
+    /// <summary>Política de rate limit usada em <c>POST /api/agent/chat</c> (120 req / 5 min por <c>sub</c> do JWT).</summary>
     public const string ChatRateLimitPolicy = "ChatPerJwtSub";
 
     public static IServiceCollection AddAgentApi(this IServiceCollection services, IConfiguration configuration)
@@ -52,7 +52,6 @@ public static class AgentApiDependencyInjection
         services.AddSingleton<GoogleKernelFactory>();
         services.AddSingleton<ILLMProviderResolver, LLMProviderResolver>();
         services.AddSingleton<IKernelFactory, ProviderKernelFactory>();
-        services.AddSingleton<AgentMemoryStore>();
         services.AddScoped<ProductPlugin>();
         services.AddScoped<CartPlugin>();
         services.AddScoped<OrderPlugin>();
@@ -77,7 +76,12 @@ public static class AgentApiDependencyInjection
         services.AddScoped<IToolApprovalArgumentEnrichmentStrategy, CartItemApprovalEnrichmentStrategy>();
         services.AddScoped<IApprovalArgumentEnricher, ApprovalArgumentEnricher>();
 
-        // ── Memória: volátil (padrão) com AgentMemoryStore ou Redis (multi-instância) ──
+        // ── Memória (IMemoryService):
+        //   • volatile (padrão): histórico em processo via ChatHistory (Microsoft.SemanticKernel) em
+        //     AgentMemoryStore; Kernel/plugins SK são usados no pipeline LLM — não na serialização Redis.
+        //   • redis: histórico como JSON numa chave por sessão (StackExchange.Redis); sem ChatHistory no API.
+        //   Lifetimes: VolatileMemoryService = singleton (estado partilhado no processo); RedisMemoryService =
+        //   scoped (sem estado próprio — instância efémera por pedido; útil em testes com scope por teste).
         var memProvider = configuration["Memory:Provider"]?.ToLowerInvariant() ?? "volatile";
         if (memProvider is "redis")
         {
@@ -89,6 +93,7 @@ public static class AgentApiDependencyInjection
         }
         else
         {
+            services.AddSingleton<AgentMemoryStore>();
             services.AddSingleton<IMemoryService, VolatileMemoryService>();
         }
 
@@ -125,7 +130,7 @@ public static class AgentApiDependencyInjection
                         _ => new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
                         {
                             PermitLimit = 0,
-                            Window = TimeSpan.FromMinutes(1),
+                            Window = TimeSpan.FromMinutes(5),
                             QueueLimit = 0,
                             AutoReplenishment = true
                         }));
@@ -135,8 +140,8 @@ public static class AgentApiDependencyInjection
                     sub,
                     _ => new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = 30,
-                        Window = TimeSpan.FromMinutes(1),
+                        PermitLimit = 120,
+                        Window = TimeSpan.FromMinutes(5),
                         QueueLimit = 0,
                         AutoReplenishment = true
                     }));

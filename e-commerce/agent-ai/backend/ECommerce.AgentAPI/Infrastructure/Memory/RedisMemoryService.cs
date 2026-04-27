@@ -7,6 +7,10 @@ using StackExchange.Redis;
 
 namespace ECommerce.AgentAPI.Infrastructure.Memory;
 
+/// <summary>
+/// <see cref="IMemoryService"/> com histórico JSON por sessão no Redis. Registado como <b>scoped</b>:
+/// o serviço é efémero por pedido/scope (sem estado além de dependências; seguro para testes com scope isolado).
+/// </summary>
 public sealed class RedisMemoryService : IMemoryService
 {
     private const string KeyPrefix = "ecommerce:agent:chat:";
@@ -49,21 +53,14 @@ public sealed class RedisMemoryService : IMemoryService
     {
         if (maxTurns < 1) maxTurns = 1;
         var list = await GetHistoryAsync(sessionId).ConfigureAwait(false);
-        var withSystem = 0;
-        for (; withSystem < list.Count && list[withSystem].Role == MessageRole.System; withSystem++)
-        {
-        }
-        var userIndices = new List<int>();
-        for (var i = withSystem; i < list.Count; i++)
-        {
-            if (list[i].Role == MessageRole.User)
-                userIndices.Add(i);
-        }
-        if (userIndices.Count > maxTurns)
-        {
-            var firstIdx = userIndices[^maxTurns];
-            list = [.. list.Take(withSystem), .. list.Skip(firstIdx)];
-        }
+        var start = ConversationUserTurnTrimmer.GetContentStartForDomainMessages(list);
+        if (ConversationUserTurnTrimmer.TryGetRemoveRange(
+                list.Count,
+                start,
+                i => list[i].Role == MessageRole.User,
+                maxTurns,
+                out var removeCount))
+            list.RemoveRange(start, removeCount);
         await SetListAsync(sessionId, list).ConfigureAwait(false);
     }
 

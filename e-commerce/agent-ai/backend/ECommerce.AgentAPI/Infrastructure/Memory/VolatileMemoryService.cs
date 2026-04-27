@@ -6,16 +6,26 @@ using DomainChat = ECommerce.AgentAPI.Domain.Entities;
 
 namespace ECommerce.AgentAPI.Infrastructure.Memory;
 
+/// <summary>
+/// <see cref="IMemoryService"/> in-process: estado em <see cref="AgentMemoryStore"/>
+/// (singleton com o registo de DI). Não usar como se fosse por pedido/scope.
+/// </summary>
 public sealed class VolatileMemoryService : IMemoryService
 {
     private readonly AgentMemoryStore _store;
 
     public VolatileMemoryService(AgentMemoryStore store) => _store = store;
 
+    /// <summary>
+    /// Projeta <see cref="ChatHistory"/> do SK para a lista de domínio de cada pedido. Os valores
+    /// <c>Id</c> e <c>CreatedAt</c> são preenchidos só de forma informativa (novos a cada leitura);
+    /// o consumidor (LLM) usa apenas o papel e o texto. Não persistir estes itens como fonte de verdade.
+    /// </summary>
     public Task<List<DomainChat.ChatMessage>> GetHistoryAsync(string sessionId)
     {
         var history = _store.GetOrCreate(sessionId);
         var list = new List<DomainChat.ChatMessage>();
+        var now = DateTime.UtcNow;
         foreach (var c in history)
         {
             list.Add(new DomainChat.ChatMessage
@@ -24,7 +34,7 @@ public sealed class VolatileMemoryService : IMemoryService
                 SessionId = sessionId,
                 Role = ToDomainRole(c.Role),
                 Content = c.Content ?? string.Empty,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = now,
                 ToolName = null
             });
         }

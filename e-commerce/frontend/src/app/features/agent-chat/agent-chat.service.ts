@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, finalize } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AgentChatMessage, ChatRequest, ChatResponse, ChatToolInfo } from './agent-chat.models';
 
@@ -13,9 +13,21 @@ const AGENT_CLIENT_VERSION = 'frontend-angular';
 export class AgentChatService {
   private readonly http = inject(HttpClient);
   private readonly agentUrl = `${environment.agentApiUrl}/api/agent/chat`;
+  private readonly clearSessionUrl = `${environment.agentApiUrl}/api/agent/chat/session/clear`;
 
   /** Mesmo GUID após F5 (sessionStorage); `resetSession` no logout ou nova conversa. */
   private sessionId = this.loadOrCreateSessionId();
+
+  /**
+   * Liberta histórico e aprovação pendente no Agent para a sessão atual, depois gera um novo
+   * `sessionId` local (equivalente a “nova conversa” no UI).
+   */
+  newConversation(): Observable<void> {
+    const body = { sessionId: this.sessionId };
+    return this.http.post<void>(this.clearSessionUrl, body).pipe(
+      finalize(() => this.resetSession())
+    );
+  }
 
   sendMessage(message: string): Observable<ChatResponse> {
     const correlationId = this.createCorrelationId();
