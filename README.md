@@ -23,7 +23,6 @@ Em ambiente **Development**, a API do e-commerce executa **seed** inicial (utili
 
 ```
 dotnet-ecommerce-ai-agent/
-├── documents/                    # Documentação e fluxos do agente (ex.: Agent IA / Fluxo)
 ├── e-commerce/
 │   ├── backend/
 │   │   ├── ECommerce.sln
@@ -88,7 +87,7 @@ dotnet-ecommerce-ai-agent/
 
 | Tecnologia | Versão (package.json / lock típico) |
 |------------|-------------------------------------|
-| **Angular** (core, router, forms, etc.) | **^17.3.0** (CLI/build **^17.3.17**) |
+| **Angular** (core, router, forms, animations, etc.) | **^17.3.0**–**^17.3.12** (CLI/build **^17.3.17**) |
 | **Angular Material / CDK** | **^17.3.10** |
 | **TypeScript** | **~5.4.2** |
 | **RxJS** | **~7.8.0** |
@@ -117,7 +116,7 @@ dotnet-ecommerce-ai-agent/
 - [SQL Server](https://www.microsoft.com/sql-server) acessível pela connection string do e-commerce
 - Para o frontend: [Node.js](https://nodejs.org/) LTS (18 ou 20) e **npm**
 - Para o agente com OpenAI: chave em `LLM:OpenAI:ApiKey` (ou ficheiros de ambiente); opcionalmente chave Google se `LLM:Provider` for Google
-- Opcional no Agent: **Redis** se `Memory:Provider` estiver configurado para usar Redis (por defeito pode ser memória volátil — ver `appsettings`)
+- **Redis** no Agent apenas quando `Memory:Provider` = `redis`: servidor acessível em `Memory:Redis:ConnectionString` (ex.: `localhost:6379`). Em desenvolvimento típico: `docker run -d --name redis -p 6379:6379 redis:alpine`. Com `volatile`, não é necessário Redis
 
 ---
 
@@ -164,15 +163,18 @@ dotnet-ecommerce-ai-agent/
 
 ### Backend — Agent de IA (`ECommerce.AgentAPI`)
 
-1. Configure `e-commerce/agent-ai/backend/ECommerce.AgentAPI/appsettings.json` ou `appsettings.Development.json`:
+1. Configure `appsettings.Development.json` (repositório) ou `appsettings.json` / variáveis de ambiente em outros ambientes, em `e-commerce/agent-ai/backend/ECommerce.AgentAPI/`:
 
    - **`LLM`:** `Provider` (`OpenAI` ou `Google`), chaves e modelos em `OpenAI` / `Google`.
    - **`Jwt`:** `Issuer`, `Audience`, `SecretKey` **alinhados** ao `ECommerce.API`.
-   - **`ECommerceApi:BaseUrl`:** base da API versionada (ex.: `https://localhost:7026/api/v1`).
+   - **`ECommerceApi:BaseUrl`:** base da API versionada (ex.: `http://localhost:5149/api/v1` ou HTTPS conforme o perfil do e-commerce).
    - **`Cors:AllowedOrigins`:** deve incluir a origem do Angular (ex.: `http://localhost:4200`).
-   - Opcional: **`Memory:Redis`** se usar Redis para estado de conversação.
+   - **`Memory`** — histórico de conversa por `sessionId`:
+     - **`Provider`:** `volatile` (omissão no código) — estado em memória no processo do Agent; útil sem infraestrutura extra.
+     - **`Provider`:** `redis` — histórico serializado em Redis; obrigatório **`Memory:Redis:ConnectionString`**. O `ConnectionMultiplexer` usa `AbortOnConnectFail = false` para não falhar no arranque se o broker ainda não estiver disponível (reconexão em background). Operações de chat continuam a precisar de Redis acessível.
+     - Opcionais com Redis: `Memory:Redis:KeyTtlSeconds` (TTL da chave), `Memory:Redis:KeyPrefix` (prefixo das chaves).
 
-2. **Ordem:** iniciar **SQL Server** e **ECommerce.API** antes do Agent (o Refit precisa de alcançar o e-commerce).
+2. **Ordem:** iniciar **SQL Server** e **ECommerce.API** antes do Agent (o Refit precisa de alcançar o e-commerce). Se `Memory:Provider` = `redis`, ter **Redis** a correr antes de depender de `/health/ready` ou de persistência de conversa.
 
 3. **Executar:**
 
@@ -272,8 +274,9 @@ Base típica em desenvolvimento: **`http://localhost:5200`**.
 | GET | `/` | — | Resposta simples OK (health lógico mínimo). |
 | GET | `/health` | — | Health check agregado. |
 | GET | `/health/live` | — | Liveness (tags `live`). |
-| GET | `/health/ready` | — | Readiness (tags `ready`). |
+| GET | `/health/ready` | — | Readiness (tags `ready`). Com `Memory:Provider=redis`, inclui verificação de conexão ao Redis. |
 | POST | `/api/agent/chat` | **Bearer** (mesmo JWT do e-commerce) | Chat do agente. **Rate limiting** aplicado. Timeout configurável (`Agent:Hosting:ChatRequestTimeoutSeconds`, padrão 120 s). |
+| POST | `/api/agent/chat/session/clear` | **Bearer** | **204** — apaga histórico da sessão no armazenamento de memória e limpa aprovações pendentes para o `sessionId`. Corpo JSON: `sessionId` (GUID). **Rate limiting** igual ao chat. |
 
 **Corpo de `POST /api/agent/chat` (`ChatRequest`):**
 
