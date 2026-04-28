@@ -37,6 +37,7 @@ public sealed class ProcessUserMessageUseCase
     private readonly IToolApprovalService _approval;
     private readonly IMemoryService _memory;
     private readonly IOptions<AgentOptions> _options;
+    private readonly IOptions<AgentPromptOptions> _promptOptions;
     private readonly IChatErrorHandler _errorHandler;
     private readonly ToolCatalog _catalog;
     private readonly IApprovalArgumentEnricher _approvalEnricher;
@@ -48,6 +49,7 @@ public sealed class ProcessUserMessageUseCase
         IToolApprovalService approval,
         IMemoryService memory,
         IOptions<AgentOptions> options,
+        IOptions<AgentPromptOptions> promptOptions,
         IChatErrorHandler errorHandler,
         ToolCatalog catalog,
         IApprovalArgumentEnricher approvalEnricher,
@@ -58,6 +60,7 @@ public sealed class ProcessUserMessageUseCase
         _approval = approval;
         _memory = memory;
         _options = options;
+        _promptOptions = promptOptions;
         _errorHandler = errorHandler;
         _catalog = catalog;
         _approvalEnricher = approvalEnricher;
@@ -128,6 +131,7 @@ public sealed class ProcessUserMessageUseCase
         }
 
         var llm = _llmFactory.CreateFromConfig();
+        var systemPrompt = _promptOptions.Value.ResolveSystemPrompt();
 
         await PersistUserMessageAsync(sessionId, command.Message).ConfigureAwait(false);
 
@@ -141,7 +145,7 @@ public sealed class ProcessUserMessageUseCase
                     Input = command.Message,
                     History = await _memory.GetHistoryAsync(sessionId).ConfigureAwait(false),
                     Tools = [.. ToolContractComposer.Compose(_catalog)],
-                    SystemPrompt = AgentSystemPrompt.Text,
+                    SystemPrompt = systemPrompt,
                     Temperature = 0.3f,
                     MaxTokens = 1024
                 },

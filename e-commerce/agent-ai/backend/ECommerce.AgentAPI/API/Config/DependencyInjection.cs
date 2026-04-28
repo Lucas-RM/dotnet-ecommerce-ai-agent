@@ -101,6 +101,7 @@ public static class AgentApiDependencyInjection
         }
 
         services.Configure<AgentOptions>(configuration.GetSection(AgentOptions.SectionName));
+        services.Configure<AgentPromptOptions>(configuration.GetSection(AgentPromptOptions.SectionName));
         services.Configure<AgentObservabilityOptions>(configuration.GetSection(AgentObservabilityOptions.SectionName));
         services.AddSingleton<IAgentObservability, AgentObservability>();
         services.AddSingleton<IChatErrorHandler, HttpChatErrorHandler>();
