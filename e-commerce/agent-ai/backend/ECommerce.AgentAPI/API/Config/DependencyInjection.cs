@@ -88,7 +88,10 @@ public static class AgentApiDependencyInjection
             var conn = configuration["Memory:Redis:ConnectionString"]
                 ?? throw new InvalidOperationException(
                     "Configuração 'Memory:Redis:ConnectionString' ausente para Memory:Provider=redis.");
-            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(conn));
+            var redisOptions = ConfigurationOptions.Parse(conn);
+            // Equiv. a abortConnect=false: não falha no arranque se o broker ainda não responde.
+            redisOptions.AbortOnConnectFail = false;
+            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
             services.AddScoped<IMemoryService, RedisMemoryService>();
         }
         else
