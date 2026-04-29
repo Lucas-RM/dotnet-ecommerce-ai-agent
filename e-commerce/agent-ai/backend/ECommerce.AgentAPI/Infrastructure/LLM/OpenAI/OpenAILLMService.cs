@@ -2,7 +2,6 @@ using ECommerce.AgentAPI.Domain.Entities;
 using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.Domain.ValueObjects;
-using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.LLM;
 using Microsoft.SemanticKernel;
@@ -14,19 +13,19 @@ namespace ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 public sealed class OpenAILLMService : ILLMService
 {
     private readonly OpenAIKernelFactory _kernelFactory;
-    private readonly IECommerceApi _eCommerceApi;
     private readonly ToolApprovalService _toolApproval;
     private readonly ILogger<OpenAILLMService> _logger;
+    private readonly IServiceProvider _requestServices;
 
     public OpenAILLMService(
         OpenAIKernelFactory kernelFactory,
-        IECommerceApi eCommerceApi,
         ToolApprovalService toolApproval,
+        IServiceProvider requestServices,
         ILogger<OpenAILLMService> logger)
     {
         _kernelFactory = kernelFactory;
-        _eCommerceApi = eCommerceApi;
         _toolApproval = toolApproval;
+        _requestServices = requestServices;
         _logger = logger;
     }
 
@@ -44,7 +43,7 @@ public sealed class OpenAILLMService : ILLMService
 
         var key = request.SessionId;
         var history = ToSkChatHistory(request);
-        var kernel = _kernelFactory.CreateKernel(_eCommerceApi, sessionGuid);
+        var kernel = _kernelFactory.CreateKernel(sessionGuid.ToString(), _requestServices);
         var chat = kernel.GetRequiredService<IChatCompletionService>();
         var settings = _kernelFactory.CreatePromptExecutionSettings();
         if (request.Temperature > 0)

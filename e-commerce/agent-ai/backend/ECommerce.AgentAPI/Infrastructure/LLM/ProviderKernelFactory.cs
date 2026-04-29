@@ -1,5 +1,4 @@
 using ECommerce.AgentAPI.Domain.Enums;
-using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.LLM.Google;
 using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 namespace ECommerce.AgentAPI.Infrastructure.LLM;
@@ -20,13 +19,15 @@ public sealed class ProviderKernelFactory : IKernelFactory
         _googleKernelFactory = googleKernelFactory;
     }
 
-    public Microsoft.SemanticKernel.Kernel CreateKernel(IECommerceApi ecommerceApi, string sessionId)
+    public Microsoft.SemanticKernel.Kernel CreateKernel(
+        string sessionId,
+        IServiceProvider requestServices)
     {
         var provider = _providerResolver.Resolve();
         return provider switch
         {
-            LLMProvider.OpenAI => _openAiKernelFactory.CreateKernel(ecommerceApi, sessionId),
-            LLMProvider.Google => _googleKernelFactory.CreateKernel(ecommerceApi, sessionId),
+            LLMProvider.OpenAI => _openAiKernelFactory.CreateKernel(sessionId, requestServices),
+            LLMProvider.Google => _googleKernelFactory.CreateKernel(sessionId, requestServices),
             _ => throw new NotSupportedException($"Provedor '{provider}' não suportado.")
         };
     }

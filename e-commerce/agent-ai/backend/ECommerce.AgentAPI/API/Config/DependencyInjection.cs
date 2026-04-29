@@ -16,6 +16,7 @@ using ECommerce.AgentAPI.Infrastructure.ErrorHandling;
 using ECommerce.AgentAPI.Infrastructure.LLM;
 using ECommerce.AgentAPI.Infrastructure.LLM.Google;
 using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
+using ECommerce.AgentAPI.Infrastructure.LLM.Plugins;
 using ECommerce.AgentAPI.Infrastructure.Memory;
 using ECommerce.AgentAPI.Infrastructure.Tools;
 using ECommerce.AgentAPI.Infrastructure.Observability;
@@ -48,10 +49,11 @@ public static class AgentApiDependencyInjection
         // ── Aprovação, Kernel, plugins SK (instâncias também criadas em OpenAIKernelFactory; registo alinha evolução / testes) ──
         services.AddSingleton<ApprovalStateStore>();
         services.AddSingleton<ToolApprovalService>();
-        services.AddSingleton<OpenAIKernelFactory>();
-        services.AddSingleton<GoogleKernelFactory>();
+        services.AddScoped<OpenAIKernelFactory>();
+        services.AddScoped<GoogleKernelFactory>();
         services.AddSingleton<ILLMProviderResolver, LLMProviderResolver>();
-        services.AddSingleton<IKernelFactory, ProviderKernelFactory>();
+        services.AddScoped<IKernelFactory, ProviderKernelFactory>();
+        services.AddScoped<IPluginFactory, PluginFactory>();
         services.AddScoped<ProductPlugin>();
         services.AddScoped<CartPlugin>();
         services.AddScoped<OrderPlugin>();
@@ -59,10 +61,10 @@ public static class AgentApiDependencyInjection
         // ── Refit + Polly + JWT no outbound (antes dos serviços que dependem de IECommerceApi) ──
         services.AddECommerceApi(configuration);
 
-        // ── LLM Layer (Singleton — OpenAILLMService reutiliza um IECommerceApi/HttpClient) ──
-        services.AddSingleton<OpenAILLMService>();
-        services.AddSingleton<GoogleLLMService>();
-        services.AddSingleton<ILLMFactory, LLMFactory>();
+        // ── LLM Layer (Scoped — kernel/plugins respeitam dependências scoped por request) ──
+        services.AddScoped<OpenAILLMService>();
+        services.AddScoped<GoogleLLMService>();
+        services.AddScoped<ILLMFactory, LLMFactory>();
 
         ValidateLLMProviderConfiguration(configuration);
 

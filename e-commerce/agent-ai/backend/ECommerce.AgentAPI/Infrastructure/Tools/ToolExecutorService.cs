@@ -17,19 +17,19 @@ namespace ECommerce.AgentAPI.Infrastructure.Tools;
 public sealed class ToolExecutorService : IToolExecutor
 {
     private readonly IKernelFactory _kernelFactory;
-    private readonly IECommerceApi _eCommerceApi;
     private readonly ToolApprovalService _toolApproval;
     private readonly IAgentObservability _observability;
+    private readonly IServiceProvider _requestServices;
 
     public ToolExecutorService(
         IKernelFactory kernelFactory,
-        IECommerceApi eCommerceApi,
         ToolApprovalService toolApproval,
+        IServiceProvider requestServices,
         IAgentObservability observability)
     {
         _kernelFactory = kernelFactory;
-        _eCommerceApi = eCommerceApi;
         _toolApproval = toolApproval;
+        _requestServices = requestServices;
         _observability = observability;
     }
 
@@ -54,7 +54,7 @@ public sealed class ToolExecutorService : IToolExecutor
             toolCall.CorrelationId);
         try
         {
-            var kernel = _kernelFactory.CreateKernel(_eCommerceApi, toolCall.SessionId);
+            var kernel = _kernelFactory.CreateKernel(toolCall.SessionId, _requestServices);
             if (_toolApproval.RequiresApproval(name))
             {
                 _toolApproval.PrepareApprovedExecution(kernel);
@@ -156,7 +156,7 @@ public sealed class ToolExecutorService : IToolExecutor
                 var body = ECommerceApiErrorMessageReader.TryGetMessageFromApiException(api);
                 if (!string.IsNullOrWhiteSpace(body))
                 {
-                    return body;
+                    return body!;
                 }
 
                 return MapApiExceptionToUserMessage(api);
