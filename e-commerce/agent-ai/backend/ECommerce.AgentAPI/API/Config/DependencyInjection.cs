@@ -3,8 +3,11 @@ using System.Text;
 using System.Threading.RateLimiting;
 using ECommerce.AgentAPI.Application.Abstractions;
 using ECommerce.AgentAPI.Application.Agents;
+using ECommerce.AgentAPI.Application.Agents.Prompting;
+using ECommerce.AgentAPI.Application.Agents.Routing;
 using ECommerce.AgentAPI.Application.Options;
 using ECommerce.AgentAPI.Application.Tools;
+using ECommerce.AgentAPI.Configuration.Options;
 using ECommerce.AgentAPI.Application.UseCases;
 using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.API.Middleware;
@@ -52,7 +55,7 @@ public static class AgentApiDependencyInjection
         services.AddScoped<GoogleKernelFactory>();
         services.AddScoped<IKernelFactoryProviderStrategy, OpenAIKernelFactoryProviderStrategy>();
         services.AddScoped<IKernelFactoryProviderStrategy, GoogleKernelFactoryProviderStrategy>();
-        services.AddSingleton<ILLMProviderResolver, LLMProviderResolver>();
+        services.AddScoped<ILLMProviderResolver, LLMProviderResolver>();
         services.AddScoped<IKernelFactory, ProviderKernelFactory>();
         services.AddScoped<IPluginFactory, PluginFactory>();
         services.AddScoped<ProductPlugin>();
@@ -108,8 +111,12 @@ public static class AgentApiDependencyInjection
 
         services.Configure<AgentOptions>(configuration.GetSection(AgentOptions.SectionName));
         services.Configure<AgentPromptOptions>(configuration.GetSection(AgentPromptOptions.SectionName));
+        services.Configure<AgentCatalogOptions>(configuration.GetSection(AgentCatalogOptions.SectionName));
         services.Configure<AgentObservabilityOptions>(configuration.GetSection(AgentObservabilityOptions.SectionName));
         services.AddSingleton<IAgentObservability, AgentObservability>();
+        services.AddSingleton<IAgentRouter, AgentRouter>();
+        services.AddScoped<IAgentExecutionContext, AgentExecutionContext>();
+        services.AddSingleton<IPromptComposer, PromptComposer>();
         services.AddSingleton<IChatErrorHandler, HttpChatErrorHandler>();
         services.AddScoped<IToolExecutor, ToolExecutorService>();
         services.AddScoped<ProcessUserMessageUseCase>();

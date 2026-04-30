@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using ECommerce.AgentAPI.Application.Abstractions;
-using ECommerce.AgentAPI.Application.Agents;
+using ECommerce.AgentAPI.Application.Agents.Prompting;
+using ECommerce.AgentAPI.Application.Agents.Routing;
 using ECommerce.AgentAPI.Application.Capabilities;
 using ECommerce.AgentAPI.Application.DTOs;
 using ECommerce.AgentAPI.Application.Options;
@@ -42,6 +43,9 @@ public sealed class ProcessUserMessageUseCase
     private readonly ToolCatalog _catalog;
     private readonly IApprovalArgumentEnricher _approvalEnricher;
     private readonly IAgentObservability _observability;
+    private readonly IAgentRouter _agentRouter;
+    private readonly IAgentExecutionContext _agentContext;
+    private readonly IPromptComposer _promptComposer;
 
     public ProcessUserMessageUseCase(
         ILLMFactory llmFactory,
@@ -53,7 +57,10 @@ public sealed class ProcessUserMessageUseCase
         IChatErrorHandler errorHandler,
         ToolCatalog catalog,
         IApprovalArgumentEnricher approvalEnricher,
-        IAgentObservability observability)
+        IAgentObservability observability,
+        IAgentRouter agentRouter,
+        IAgentExecutionContext agentContext,
+        IPromptComposer promptComposer)
     {
         _llmFactory = llmFactory;
         _tools = tools;
@@ -65,6 +72,9 @@ public sealed class ProcessUserMessageUseCase
         _catalog = catalog;
         _approvalEnricher = approvalEnricher;
         _observability = observability;
+        _agentRouter = agentRouter;
+        _agentContext = agentContext;
+        _promptComposer = promptComposer;
     }
 
     public async Task<ChatProcessResult> ExecuteAsync(
@@ -85,6 +95,9 @@ public sealed class ProcessUserMessageUseCase
         ProcessMessageCommand command,
         CancellationToken cancellationToken)
     {
+        var profile = _agentRouter.Resolve(command.AgentId);
+        _agentContext.CurrentProfile = profile;
+
         var sessionId = command.SessionId;
         if (string.IsNullOrWhiteSpace(sessionId))
         {
@@ -93,10 +106,29 @@ public sealed class ProcessUserMessageUseCase
                 BuildResponse(ChatEnvelope.TextOnly(SessionMissingMessage)));
         }
 
-        var existing = await _approval.GetPendingAsync(sessionId).ConfigureAwait(false);
+        var sessionKey = BuildConversationKey(profile.Id, sessionId);
+        var existingBySession = await _approval.GetPendingAsync(sessionKey).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(command.ApprovalId) && existingBySession is not null)
+        {
+            var existingByApproval = await _approval
+                .GetPendingByApprovalIdAsync(sessionKey, command.ApprovalId.Trim())
+                .ConfigureAwait(false);
+            if (existingByApproval is null)
+            {
+                return new ChatProcessResult(
+                    StatusCodes.Status409Conflict,
+                    BuildResponse(
+                        ChatEnvelope.TextOnly("A aprovação informada não é válida ou já expirou."),
+                        requiresApproval: false));
+            }
+        }
+
+        var existing = string.IsNullOrWhiteSpace(command.ApprovalId)
+            ? existingBySession
+            : await _approval.GetPendingByApprovalIdAsync(sessionKey, command.ApprovalId.Trim()).ConfigureAwait(false);
         if (existing is not null)
         {
-            await PersistUserMessageAsync(sessionId, command.Message).ConfigureAwait(false);
+            await PersistUserMessageAsync(sessionKey, command.Message).ConfigureAwait(false);
 
             var classification = _approval.ClassifyUserResponse(command.Message);
             var cap = ToolCapabilityResolver.Resolve(existing.ToolCall.Name);
@@ -111,6 +143,7 @@ public sealed class ProcessUserMessageUseCase
                     return await ExecuteApprovedToolAsync(
                             existing,
                             command,
+                            profile.Id,
                             cancellationToken)
                         .ConfigureAwait(false);
                 case ApprovalClassification.Denied:
@@ -119,7 +152,7 @@ public sealed class ProcessUserMessageUseCase
                         sessionId,
                         command.CorrelationId,
                         "approval_cancelled");
-                    return await CancelPendingAsync(sessionId).ConfigureAwait(false);
+                    return await CancelPendingAsync(sessionKey).ConfigureAwait(false);
                 default:
                     _observability.RecordApproval("ambiguous", existing.ToolCall.Name, cap);
                     _observability.AddChatSummaryTags(
@@ -130,10 +163,12 @@ public sealed class ProcessUserMessageUseCase
             }
         }
 
-        var llm = _llmFactory.CreateFromConfig();
-        var systemPrompt = _promptOptions.Value.ResolveSystemPrompt();
+        var llm = _llmFactory.Create(profile.LlmProvider);
+        var systemPrompt = _promptComposer.ComposeSystemPrompt(profile);
+        if (string.IsNullOrWhiteSpace(systemPrompt))
+            systemPrompt = _promptOptions.Value.ResolveSystemPrompt();
 
-        await PersistUserMessageAsync(sessionId, command.Message).ConfigureAwait(false);
+        await PersistUserMessageAsync(sessionKey, command.Message).ConfigureAwait(false);
 
         using var llmActivity = _observability.StartLlmActivity(sessionId, command.CorrelationId);
         var sw = Stopwatch.StartNew();
@@ -143,8 +178,8 @@ public sealed class ProcessUserMessageUseCase
                 {
                     SessionId = sessionId,
                     Input = command.Message,
-                    History = await _memory.GetHistoryAsync(sessionId).ConfigureAwait(false),
-                    Tools = [.. ToolContractComposer.Compose(_catalog)],
+                    History = await _memory.GetHistoryAsync(sessionKey).ConfigureAwait(false),
+                    Tools = [.. ToolContractComposer.Compose(_catalog, profile.EnabledTools)],
                     SystemPrompt = systemPrompt,
                     Temperature = 0.3f,
                     MaxTokens = 1024
@@ -177,7 +212,7 @@ public sealed class ProcessUserMessageUseCase
                         sessionId,
                         command.CorrelationId,
                         "enrichment_error");
-                    return await CancelPluginActionAsync(sessionId, enrichment.Error).ConfigureAwait(false);
+                    return await CancelPluginActionAsync(sessionKey, enrichment.Error).ConfigureAwait(false);
                 }
 
                 call.Arguments = enrichment.Arguments;
@@ -188,7 +223,7 @@ public sealed class ProcessUserMessageUseCase
                     cap);
                 _observability.RecordApproval("requested", name, cap);
                 _observability.AddChatSummaryTags(sessionId, command.CorrelationId, "approval_pending");
-                return await RequestApprovalAsync(sessionId, call).ConfigureAwait(false);
+                return await RequestApprovalAsync(sessionKey, call).ConfigureAwait(false);
             }
 
             _observability.RecordLlmDuration(
@@ -203,7 +238,7 @@ public sealed class ProcessUserMessageUseCase
                 sessionId,
                 command.CorrelationId,
                 executionResult.Success ? "tool_ok" : "tool_error");
-            return await HandleToolResultAsync(sessionId, call, executionResult).ConfigureAwait(false);
+            return await HandleToolResultAsync(sessionKey, call, executionResult).ConfigureAwait(false);
         }
 
         if (!response.HasToolCall
@@ -219,7 +254,7 @@ public sealed class ProcessUserMessageUseCase
                 sessionId,
                 command.CorrelationId,
                 "kernel_envelope");
-            return await HandleKernelAutoToolEnvelopesAsync(sessionId, response)
+            return await HandleKernelAutoToolEnvelopesAsync(sessionKey, response)
                 .ConfigureAwait(false);
         }
 
@@ -229,7 +264,7 @@ public sealed class ProcessUserMessageUseCase
             null,
             AgentCapability.None);
         _observability.AddChatSummaryTags(sessionId, command.CorrelationId, "text");
-        return await HandleLlmTextResponseAsync(sessionId, response.Text).ConfigureAwait(false);
+        return await HandleLlmTextResponseAsync(sessionKey, response.Text).ConfigureAwait(false);
     }
 
     private async Task<ChatProcessResult> HandleKernelAutoToolEnvelopesAsync(
@@ -291,12 +326,14 @@ public sealed class ProcessUserMessageUseCase
 
     private async Task<ChatProcessResult> RequestApprovalAsync(string sessionId, ToolCall call)
     {
+        var approvalId = Guid.NewGuid().ToString("D");
         var approvalMessage = _catalog.BuildApprovalMessage(call.Name ?? string.Empty, ToArgs(call));
         await _approval
             .StorePendingAsync(
                 new PendingApproval
                 {
                     SessionId = sessionId,
+                    ApprovalId = approvalId,
                     ToolCall = call,
                     ApprovalMessage = approvalMessage,
                     CreatedAt = DateTime.UtcNow
@@ -305,7 +342,8 @@ public sealed class ProcessUserMessageUseCase
 
         return Ok(BuildResponse(
             ChatEnvelope.TextOnly(approvalMessage),
-            requiresApproval: true));
+            requiresApproval: true,
+            approvalId: approvalId));
     }
 
     private async Task<ChatProcessResult> HandleToolResultAsync(
@@ -339,9 +377,10 @@ public sealed class ProcessUserMessageUseCase
     private async Task<ChatProcessResult> ExecuteApprovedToolAsync(
         PendingApproval pending,
         ProcessMessageCommand command,
+        string agentId,
         CancellationToken cancellationToken)
     {
-        var sessionId = command.SessionId;
+        var sessionId = BuildConversationKey(agentId, command.SessionId);
         await _approval.ClearPendingAsync(sessionId).ConfigureAwait(false);
 
         pending.ToolCall.SessionId = sessionId;
@@ -393,7 +432,8 @@ public sealed class ProcessUserMessageUseCase
     /// </summary>
     private static ChatResponse BuildResponse(
         ChatEnvelope envelope,
-        bool requiresApproval = false)
+        bool requiresApproval = false,
+        string? approvalId = null)
     {
         var toolInfo = string.IsNullOrWhiteSpace(envelope.ToolName)
             ? null
@@ -409,7 +449,8 @@ public sealed class ProcessUserMessageUseCase
             OutroMessage = envelope.OutroMessage,
             Tool = toolInfo,
             Data = envelope.Data,
-            RequiresApproval = requiresApproval
+            RequiresApproval = requiresApproval,
+            ApprovalId = approvalId
         };
     }
 
@@ -464,4 +505,8 @@ public sealed class ProcessUserMessageUseCase
             d[kv.Key] = kv.Value;
         return d;
     }
+
+    private static string BuildConversationKey(string agentId, string sessionId) =>
+        $"{agentId}:{sessionId}";
+
 }

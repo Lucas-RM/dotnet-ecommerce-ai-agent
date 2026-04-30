@@ -16,6 +16,18 @@
         >
           Nova conversa
         </button>
+        <label class="agent-select" aria-label="Selecionar agente">
+          <span>Agente</span>
+          <select
+            [ngModel]="selectedAgentId"
+            (ngModelChange)="onAgentChanged($event)"
+            [disabled]="sending || approvalOpen"
+          >
+            @for (agent of agents; track agent.id) {
+              <option [value]="agent.id">{{ agent.displayName }}</option>
+            }
+          </select>
+        </label>
         @if (activeLlmProvider) {
           <span
             class="llm-pill"

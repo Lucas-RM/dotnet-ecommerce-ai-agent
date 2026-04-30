@@ -35,7 +35,12 @@ public sealed class ToolApprovalService
 
     public bool TryGetPending(string sessionId, out PendingToolCall? pending) => _store.TryGet(sessionId, out pending);
 
+    public bool TryGetPendingByApprovalId(string sessionId, string approvalId, out PendingToolCall? pending) =>
+        _store.TryGetByApprovalId(sessionId, approvalId, out pending);
+
     public void ClearPending(string sessionId) => _store.Clear(sessionId);
+
+    public void ClearPendingByRawSessionId(string rawSessionId) => _store.ClearByRawSessionId(rawSessionId);
 
     public bool TryRemovePending(string sessionId, out PendingToolCall? pending) =>
         _store.TryRemove(sessionId, out pending);
@@ -59,6 +64,7 @@ public sealed class ToolApprovalService
 
         return new PendingToolCall
         {
+            ApprovalId = Guid.NewGuid().ToString("D"),
             FunctionName = function.Name,
             Arguments = CloneArguments(arguments),
             ApprovalMessage = approvalMessage,

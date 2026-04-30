@@ -1,4 +1,5 @@
 using ECommerce.AgentAPI.Domain.ValueObjects;
+using ECommerce.AgentAPI.Application.Agents.Routing;
 using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.LLM;
 using ECommerce.AgentAPI.Infrastructure.LLM.Plugins;
@@ -19,14 +20,15 @@ public sealed class GoogleKernelFactory : BaseProviderKernelFactory
     public GoogleKernelFactory(
         IConfiguration configuration,
         ToolApprovalService toolApproval,
-        IPluginFactory pluginFactory)
-        : base(configuration, toolApproval, pluginFactory)
+        IPluginFactory pluginFactory,
+        IAgentExecutionContext agentExecutionContext)
+        : base(configuration, toolApproval, pluginFactory, agentExecutionContext)
     {
     }
 
-    protected override void ConfigureProviderChatCompletion(IKernelBuilder builder)
+    protected override void ConfigureProviderChatCompletion(IKernelBuilder builder, string? modelOverride)
     {
-        var modelId = Configuration["LLM:Google:Model"]
+        var modelId = modelOverride ?? Configuration["LLM:Google:Model"]
             ?? throw new InvalidOperationException("Configuração ausente: LLM:Google:Model.");
         var apiKey = Configuration["LLM:Google:ApiKey"]
             ?? throw new InvalidOperationException("Configuração ausente: LLM:Google:ApiKey.");

@@ -1,22 +1,33 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, finalize } from 'rxjs';
+import { Observable, catchError, finalize, map, of } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { AgentChatMessage, ChatRequest, ChatResponse, ChatToolInfo } from './agent-chat.models';
+import {
+  AgentChatMessage,
+  AgentDescriptor,
+  ApprovalDecisionRequest,
+  ChatRequest,
+  ChatResponse,
+  ChatToolInfo
+} from './agent-chat.models';
 
 const SESSION_ID_STORAGE_KEY = 'ecommerce.agentChat.sessionId';
 const MESSAGES_STORAGE_KEY = 'ecommerce.agentChat.messages';
+const SELECTED_AGENT_STORAGE_KEY = 'ecommerce.agentChat.selectedAgentId';
 const AGENT_CHANNEL = 'web';
 const AGENT_CLIENT_VERSION = 'frontend-angular';
+const DEFAULT_AGENT_ID = 'support-general';
 
 @Injectable({ providedIn: 'root' })
 export class AgentChatService {
   private readonly http = inject(HttpClient);
-  private readonly agentUrl = `${environment.agentApiUrl}/api/agent/chat`;
+  private readonly legacyAgentUrl = `${environment.agentApiUrl}/api/agent/chat`;
+  private readonly agentsUrl = `${environment.agentApiUrl}/api/agents`;
   private readonly clearSessionUrl = `${environment.agentApiUrl}/api/agent/chat/session/clear`;
 
   /** Mesmo GUID após F5 (sessionStorage); `resetSession` no logout ou nova conversa. */
   private sessionId = this.loadOrCreateSessionId();
+  private selectedAgentId = this.loadSelectedAgentId();
 
   /**
    * Liberta histórico e aprovação pendente no Agent para a sessão atual, depois gera um novo
@@ -29,9 +40,32 @@ export class AgentChatService {
     );
   }
 
+  getSelectedAgentId(): string {
+    return this.selectedAgentId;
+  }
+
+  setSelectedAgentId(agentId: string): void {
+    const next = (agentId ?? '').trim();
+    this.selectedAgentId = next.length > 0 ? next : DEFAULT_AGENT_ID;
+    try {
+      sessionStorage.setItem(SELECTED_AGENT_STORAGE_KEY, this.selectedAgentId);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  listAgents(): Observable<AgentDescriptor[]> {
+    return this.http.get<unknown[]>(this.agentsUrl).pipe(
+      map((items) => normalizeAgents(items)),
+      map((items) => items.length > 0 ? items : fallbackAgents()),
+      catchError(() => of(fallbackAgents()))
+    );
+  }
+
   sendMessage(message: string): Observable<ChatResponse> {
     const correlationId = this.createCorrelationId();
     const body: ChatRequest = {
+      agentId: this.selectedAgentId,
       sessionId: this.sessionId,
       message,
       clientVersion: AGENT_CLIENT_VERSION,
@@ -42,7 +76,24 @@ export class AgentChatService {
       },
       correlationId
     };
-    return this.http.post<ChatResponse>(this.agentUrl, body);
+    const multiAgentUrl = `${this.agentsUrl}/${encodeURIComponent(this.selectedAgentId)}/chat`;
+    return this.http.post<ChatResponse>(multiAgentUrl, body).pipe(
+      catchError(() => this.http.post<ChatResponse>(this.legacyAgentUrl, body))
+    );
+  }
+
+  submitApprovalDecision(decision: string, approvalId?: string): Observable<ChatResponse> {
+    const body: ApprovalDecisionRequest = {
+      sessionId: this.sessionId,
+      decision,
+      correlationId: this.createCorrelationId()
+    };
+
+    const approvalToken = (approvalId ?? '').trim() || 'pending';
+    const explicitApprovalUrl =
+      `${this.agentsUrl}/${encodeURIComponent(this.selectedAgentId)}/chat/approvals/${encodeURIComponent(approvalToken)}`;
+
+    return this.http.post<ChatResponse>(explicitApprovalUrl, body);
   }
 
   /** Mensagens persistidas na aba atual (sessionStorage). */
@@ -108,6 +159,18 @@ export class AgentChatService {
     } catch {
       /* ignore */
     }
+  }
+
+  private loadSelectedAgentId(): string {
+    try {
+      const value = (sessionStorage.getItem(SELECTED_AGENT_STORAGE_KEY) ?? '').trim();
+      if (value.length > 0) {
+        return value;
+      }
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_AGENT_ID;
   }
 
   private resolveLocale(): string | undefined {
@@ -231,4 +294,42 @@ function asRecordOrNull(value: unknown): Record<string, unknown> | null | undefi
   }
 
   return value as Record<string, unknown>;
+}
+
+function normalizeAgents(items: unknown[]): AgentDescriptor[] {
+  return items
+    .map((item) => normalizeAgent(item))
+    .filter((item): item is AgentDescriptor => item !== null);
+}
+
+function normalizeAgent(value: unknown): AgentDescriptor | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const item = value as Record<string, unknown>;
+  const id = typeof item['id'] === 'string' ? item['id'].trim() : '';
+  if (id.length === 0) {
+    return null;
+  }
+
+  const displayName = typeof item['displayName'] === 'string' && item['displayName'].trim().length > 0
+    ? item['displayName'].trim()
+    : id;
+
+  return {
+    id,
+    displayName,
+    description: typeof item['description'] === 'string' ? item['description'] : null,
+    provider: typeof item['provider'] === 'string' ? item['provider'] : null,
+    model: typeof item['model'] === 'string' ? item['model'] : null
+  };
+}
+
+function fallbackAgents(): AgentDescriptor[] {
+  return [
+    { id: 'support-general', displayName: 'Atendimento Geral', description: 'Agente padrão de suporte.' },
+    { id: 'sales-assistant', displayName: 'Assistente de Vendas', description: 'Catálogo e carrinho.' },
+    { id: 'order-tracker', displayName: 'Acompanhamento de Pedidos', description: 'Status e pedidos.' }
+  ];
 }

@@ -30,9 +30,15 @@ public sealed class ChatResponse
     [JsonPropertyName("requiresApproval")]
     public bool RequiresApproval { get; set; }
 
+    [JsonPropertyName("approvalId")]
+    public string? ApprovalId { get; set; }
+
     /// <summary>Provedor LLM ativo (appsettings <c>LLM:Provider</c>), p.ex. <c>openai</c> ou <c>google</c>.</summary>
     [JsonPropertyName("llmProvider")]
     public string? LlmProvider { get; set; }
+
+    [JsonPropertyName("agentId")]
+    public string? AgentId { get; set; }
 
     [JsonPropertyName("correlationId")]
     public string? CorrelationId { get; set; }

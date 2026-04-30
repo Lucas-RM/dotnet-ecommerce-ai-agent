@@ -2,6 +2,7 @@ import { ChatDataType } from './chat-contract';
 
 /** Corpo de POST /api/agent/chat (alinhado ao backend). */
 export interface ChatRequest {
+  agentId?: string;
   sessionId: string;
   message: string;
   clientVersion?: string;
@@ -31,10 +32,26 @@ export interface ChatResponse {
   details?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
   requiresApproval: boolean;
+  approvalId?: string | null;
   /** Provedor ativo no Agent (`openai` | `google`), quando o backend expõe. */
   llmProvider?: string | null;
+  agentId?: string | null;
   correlationId?: string | null;
   contractVersion?: string | null;
+}
+
+export interface ApprovalDecisionRequest {
+  sessionId: string;
+  decision: string;
+  correlationId?: string;
+}
+
+export interface AgentDescriptor {
+  id: string;
+  displayName: string;
+  description?: string | null;
+  provider?: string | null;
+  model?: string | null;
 }
 
 /**

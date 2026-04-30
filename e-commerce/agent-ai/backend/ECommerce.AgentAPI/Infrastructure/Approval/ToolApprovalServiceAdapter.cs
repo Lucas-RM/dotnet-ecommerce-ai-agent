@@ -34,9 +34,21 @@ public sealed class ToolApprovalServiceAdapter : IToolApprovalService
                 ? ToDomain(sessionId, p)
                 : null);
 
+    public Task<PendingApproval?> GetPendingByApprovalIdAsync(string sessionId, string approvalId) =>
+        Task.FromResult(
+            _inner.TryGetPendingByApprovalId(sessionId, approvalId, out var p) && p is not null
+                ? ToDomain(sessionId, p)
+                : null);
+
     public Task ClearPendingAsync(string sessionId)
     {
         _inner.ClearPending(sessionId);
+        return Task.CompletedTask;
+    }
+
+    public Task ClearPendingBySessionIdAsync(string sessionId)
+    {
+        _inner.ClearPendingByRawSessionId(sessionId);
         return Task.CompletedTask;
     }
 
@@ -59,6 +71,7 @@ public sealed class ToolApprovalServiceAdapter : IToolApprovalService
     private static PendingToolCall ToPendingToolCall(PendingApproval p) =>
         new()
         {
+            ApprovalId = p.ApprovalId,
             FunctionName = p.ToolCall.Name,
             Arguments = ToKernelArguments(p.ToolCall.Arguments),
             ApprovalMessage = p.ApprovalMessage,
@@ -69,6 +82,7 @@ public sealed class ToolApprovalServiceAdapter : IToolApprovalService
         new()
         {
             SessionId = sessionId,
+            ApprovalId = s.ApprovalId,
             ApprovalMessage = s.ApprovalMessage,
             CreatedAt = s.StoredAt.UtcDateTime,
             ToolCall = new ToolCall

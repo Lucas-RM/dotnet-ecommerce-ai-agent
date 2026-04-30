@@ -1,4 +1,5 @@
 using ECommerce.AgentAPI.Domain.ValueObjects;
+using ECommerce.AgentAPI.Application.Agents.Routing;
 using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.LLM;
 using ECommerce.AgentAPI.Infrastructure.LLM.Plugins;
@@ -17,15 +18,16 @@ public sealed class OpenAIKernelFactory : BaseProviderKernelFactory
     public OpenAIKernelFactory(
         IConfiguration configuration,
         ToolApprovalService toolApproval,
-        IPluginFactory pluginFactory)
-        : base(configuration, toolApproval, pluginFactory)
+        IPluginFactory pluginFactory,
+        IAgentExecutionContext agentExecutionContext)
+        : base(configuration, toolApproval, pluginFactory, agentExecutionContext)
     {
     }
 
-    protected override void ConfigureProviderChatCompletion(IKernelBuilder builder)
+    protected override void ConfigureProviderChatCompletion(IKernelBuilder builder, string? modelOverride)
     {
         // Secção 6 (ecommerce-agent-evolution): LLM:OpenAI — mantém fallback a OpenAI:* (legado)
-        var model = Configuration["LLM:OpenAI:Model"] ?? Configuration["OpenAI:Model"]
+        var model = modelOverride ?? Configuration["LLM:OpenAI:Model"] ?? Configuration["OpenAI:Model"]
             ?? throw new InvalidOperationException("Configuração ausente: LLM:OpenAI:Model (ou legado OpenAI:Model).");
         var apiKey = Configuration["LLM:OpenAI:ApiKey"] ?? Configuration["OpenAI:ApiKey"]
             ?? throw new InvalidOperationException("Configuração ausente: LLM:OpenAI:ApiKey (ou legado OpenAI:ApiKey).");

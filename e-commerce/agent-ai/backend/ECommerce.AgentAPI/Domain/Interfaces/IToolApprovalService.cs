@@ -11,7 +11,11 @@ public interface IToolApprovalService
 
     Task<PendingApproval?> GetPendingAsync(string sessionId);
 
+    Task<PendingApproval?> GetPendingByApprovalIdAsync(string sessionId, string approvalId);
+
     Task ClearPendingAsync(string sessionId);
+
+    Task ClearPendingBySessionIdAsync(string sessionId);
 
     ApprovalClassification ClassifyUserResponse(string message);
 }

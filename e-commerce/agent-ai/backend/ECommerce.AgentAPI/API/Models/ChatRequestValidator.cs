@@ -7,6 +7,10 @@ public sealed class ChatRequestValidator : AbstractValidator<ChatRequest>
 {
     public ChatRequestValidator()
     {
+        RuleFor(x => x.AgentId)
+            .MaximumLength(64)
+            .When(x => !string.IsNullOrWhiteSpace(x.AgentId));
+
         RuleFor(x => x.SessionId)
             .NotEmpty()
             .WithMessage("sessionId é obrigatório e não pode ser vazio.");
@@ -15,6 +19,10 @@ public sealed class ChatRequestValidator : AbstractValidator<ChatRequest>
             .NotEmpty()
             .WithMessage("message é obrigatória.")
             .MaximumLength(16_000);
+
+        RuleFor(x => x.ApprovalId)
+            .MaximumLength(128)
+            .When(x => !string.IsNullOrWhiteSpace(x.ApprovalId));
 
         RuleFor(x => x.ClientVersion)
             .MaximumLength(64)

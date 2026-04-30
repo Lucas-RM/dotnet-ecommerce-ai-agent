@@ -4,6 +4,8 @@ public sealed class PendingApproval
 {
     public string SessionId { get; set; } = string.Empty;
 
+    public string ApprovalId { get; set; } = string.Empty;
+
     public ToolCall ToolCall { get; set; } = new();
 
     public string ApprovalMessage { get; set; } = string.Empty;

@@ -23,7 +23,7 @@ public abstract class BaseLLMService : ILLMService
 
     public async Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.SessionId) || !Guid.TryParse(request.SessionId, out _))
+        if (string.IsNullOrWhiteSpace(request.SessionId))
         {
             return new LLMResponse
             {

@@ -8,7 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AgentChatService } from './agent-chat.service';
-import { AgentChatMessage, ChatResponse } from './agent-chat.models';
+import { AgentChatMessage, AgentDescriptor, ChatResponse } from './agent-chat.models';
 import { ChatReplyHtmlPipe } from './chat-reply-html.pipe';
 import { ApprovalDialogComponent } from './approval-dialog.component';
 import { ChatDataCardComponent } from './cards';
@@ -47,9 +47,19 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
   approvalOpen = false;
   /** Provedor LLM da última resposta do Agent (cabeçalho do widget). */
   activeLlmProvider: LlmProviderLabel | null = null;
+  agents: AgentDescriptor[] = [];
+  selectedAgentId = '';
 
   ngOnInit(): void {
     this.messages = this.agentChat.loadPersistedMessages();
+    this.selectedAgentId = this.agentChat.getSelectedAgentId();
+    this.agentChat.listAgents().subscribe((items) => {
+      this.agents = items;
+      if (!this.agents.some((x) => x.id === this.selectedAgentId) && this.agents.length > 0) {
+        this.selectedAgentId = this.agents[0].id;
+        this.agentChat.setSelectedAgentId(this.selectedAgentId);
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -93,6 +103,16 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
         );
       }
     });
+  }
+
+  onAgentChanged(agentId: string): void {
+    if (this.sending || this.approvalOpen) {
+      return;
+    }
+
+    this.selectedAgentId = (agentId ?? '').trim();
+    this.agentChat.setSelectedAgentId(this.selectedAgentId);
+    this.startNewConversation();
   }
 
   private appendUserAndPostMessage(text: string): void {
@@ -146,6 +166,12 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
     } else if (p === 'openai' || p === 'azure' || p === 'azureopenai') {
       this.activeLlmProvider = 'openai';
     }
+
+    const responseAgentId = (res.agentId ?? '').trim();
+    if (responseAgentId.length > 0) {
+      this.selectedAgentId = responseAgentId;
+      this.agentChat.setSelectedAgentId(responseAgentId);
+    }
   }
 
   private openApprovalAndFollowUp(res: ChatResponse): void {
@@ -158,12 +184,57 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
     });
     dref.afterClosed().subscribe((confirmed) => {
       this.approvalOpen = false;
-      if (confirmed === true) {
-        this.appendUserAndPostMessage('sim');
-        return;
-      }
-      this.appendUserAndPostMessage('não');
+      const decision = confirmed === true ? 'sim' : 'não';
+      this.appendUserAndPostApprovalDecision(decision, this.tryResolveApprovalId(res));
     });
+  }
+
+  private appendUserAndPostApprovalDecision(decision: string, approvalId?: string): void {
+    this.messages = [...this.messages, { role: 'user', text: decision }];
+    this.persistMessages();
+    this.sending = true;
+    this.queueScrollBottom();
+
+    this.agentChat.submitApprovalDecision(decision, approvalId).subscribe({
+      next: (response) => this.onResponse(response),
+      error: (err: unknown) => {
+        this.sending = false;
+        this.approvalOpen = false;
+        this.snack.open(getApiErrorMessage(err, 'Não foi possível enviar a decisão de aprovação.'), 'Fechar', {
+          duration: 5000
+        });
+      }
+    });
+  }
+
+  private tryResolveApprovalId(res: ChatResponse): string | undefined {
+    const direct = this.extractString(res.approvalId);
+    if (direct) {
+      return direct;
+    }
+
+    const metadata = res.metadata ?? null;
+    if (metadata && typeof metadata === 'object') {
+      const value = this.extractString((metadata as Record<string, unknown>)['approvalId']);
+      if (value) {
+        return value;
+      }
+    }
+
+    const details = res.details ?? null;
+    if (details && typeof details === 'object') {
+      return this.extractString((details as Record<string, unknown>)['approvalId']);
+    }
+
+    return undefined;
+  }
+
+  private extractString(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
   }
 
   private persistMessages(): void {

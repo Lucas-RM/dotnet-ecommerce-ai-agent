@@ -1,4 +1,5 @@
 using ECommerce.AgentAPI.Domain.ValueObjects;
+using ECommerce.AgentAPI.Application.Agents.Routing;
 using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.LLM.Plugins;
 using Microsoft.Extensions.Configuration;
@@ -10,35 +11,37 @@ public abstract class BaseProviderKernelFactory : IKernelFactory
 {
     private readonly ToolApprovalService _toolApproval;
     private readonly IPluginFactory _pluginFactory;
+    private readonly IAgentExecutionContext _agentExecutionContext;
     protected IConfiguration Configuration { get; }
 
     protected BaseProviderKernelFactory(
         IConfiguration configuration,
         ToolApprovalService toolApproval,
-        IPluginFactory pluginFactory)
+        IPluginFactory pluginFactory,
+        IAgentExecutionContext agentExecutionContext)
     {
         Configuration = configuration;
         _toolApproval = toolApproval;
         _pluginFactory = pluginFactory;
+        _agentExecutionContext = agentExecutionContext;
     }
 
     public virtual Microsoft.SemanticKernel.Kernel CreateKernel(
         string sessionId,
         IServiceProvider requestServices)
     {
-        if (!Guid.TryParse(sessionId, out _))
-        {
-            throw new ArgumentException("SessionId inválido.", nameof(sessionId));
-        }
-
         ArgumentNullException.ThrowIfNull(requestServices);
 
         var builder = Microsoft.SemanticKernel.Kernel.CreateBuilder();
-        ConfigureProviderChatCompletion(builder);
+        var model = _agentExecutionContext.CurrentProfile?.Model;
+        ConfigureProviderChatCompletion(builder, model);
 
         builder.Services.AddSingleton(_toolApproval);
         builder.Services.AddSingleton<IFunctionInvocationFilter, ApprovalFilter>();
-        builder.AddRegisteredToolPlugins(_pluginFactory, requestServices);
+        builder.AddRegisteredToolPlugins(
+            _pluginFactory,
+            requestServices,
+            _agentExecutionContext.CurrentProfile?.EnabledPlugins);
 
         var kernel = builder.Build();
         kernel.Data[AgentKernelDataKeys.SessionId] = sessionId;
@@ -46,5 +49,5 @@ public abstract class BaseProviderKernelFactory : IKernelFactory
         return kernel;
     }
 
-    protected abstract void ConfigureProviderChatCompletion(IKernelBuilder builder);
+    protected abstract void ConfigureProviderChatCompletion(IKernelBuilder builder, string? modelOverride);
 }

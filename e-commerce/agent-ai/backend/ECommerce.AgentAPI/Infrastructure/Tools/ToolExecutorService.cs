@@ -9,6 +9,7 @@ using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.Infrastructure.Approval;
 using ECommerce.AgentAPI.Infrastructure.LLM;
 using ECommerce.AgentAPI.Application.Abstractions;
+using ECommerce.AgentAPI.Application.Agents.Routing;
 using Microsoft.SemanticKernel;
 using Refit;
 
@@ -20,17 +21,20 @@ public sealed class ToolExecutorService : IToolExecutor
     private readonly ToolApprovalService _toolApproval;
     private readonly IAgentObservability _observability;
     private readonly IServiceProvider _requestServices;
+    private readonly IAgentExecutionContext _agentExecutionContext;
 
     public ToolExecutorService(
         IKernelFactory kernelFactory,
         ToolApprovalService toolApproval,
         IServiceProvider requestServices,
-        IAgentObservability observability)
+        IAgentObservability observability,
+        IAgentExecutionContext agentExecutionContext)
     {
         _kernelFactory = kernelFactory;
         _toolApproval = toolApproval;
         _requestServices = requestServices;
         _observability = observability;
+        _agentExecutionContext = agentExecutionContext;
     }
 
     public async Task<ToolExecutionResult> ExecuteAsync(
@@ -46,6 +50,12 @@ public sealed class ToolExecutorService : IToolExecutor
             return FailResult(null, "Tool sem nome.");
 
         var name = toolCall.Name ?? string.Empty;
+        var profile = _agentExecutionContext.CurrentProfile;
+        if (profile is not null && !profile.EnabledTools.Contains(name, StringComparer.Ordinal))
+        {
+            return FailResult(name, "Ação não permitida para este agente.");
+        }
+
         var cap = ToolCapabilityResolver.Resolve(name);
         var sw = Stopwatch.StartNew();
         using var toolActivity = _observability.StartToolActivity(

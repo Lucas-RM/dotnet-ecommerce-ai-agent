@@ -3,6 +3,7 @@ using ECommerce.AgentAPI.Application.Tools;
 using ECommerce.AgentAPI.ECommerceClient;
 using ECommerce.AgentAPI.ECommerceClient.Dtos;
 using ECommerce.AgentAPI.Infrastructure.Tools;
+using ECommerce.AgentAPI.Infrastructure.Tools.Plugins.Parameters;
 using Microsoft.SemanticKernel;
 
 namespace ECommerce.AgentAPI.Infrastructure.Tools.Plugins;
@@ -15,12 +16,11 @@ public sealed class OrderPlugin(IOrdersApi ordersApi, ICheckoutApi checkoutApi)
 
     [Description("Lista os pedidos realizados pelo usuário com status e valor total.")]
     [KernelFunction("list_orders")]
-    public async Task<string> ListOrdersAsync(
-        [Description("Página da listagem (default 1)")] int page = 1,
-        [Description("Quantidade por página (default 5)")] int pageSize = 5)
+    public async Task<string> ListOrdersAsync(ListOrdersParameters? parameters = null)
     {
-        var effectivePage = page <= 0 ? 1 : page;
-        var effectivePageSize = pageSize <= 0 ? 5 : pageSize;
+        var input = parameters ?? new ListOrdersParameters();
+        var effectivePage = input.Page <= 0 ? 1 : input.Page;
+        var effectivePageSize = input.PageSize <= 0 ? 5 : input.PageSize;
         var query = new OrderQueryParams(Page: effectivePage, PageSize: effectivePageSize);
         var response = await _ordersApi.GetOrdersAsync(query);
         return KernelJsonSerializer.Serialize(response);
@@ -33,12 +33,11 @@ public sealed class OrderPlugin(IOrdersApi ordersApi, ICheckoutApi checkoutApi)
         "quando só existir um pedido.")]
     [KernelFunction("get_order")]
     public async Task<string> GetOrderByIdAsync(
-        [Description(
-            "Número do pedido (UUID da coluna Pedido), prefixo desse número, data/hora da listagem, ou \"último pedido\".")] string orderId,
+        GetOrderParameters parameters,
         CancellationToken cancellationToken = default)
     {
         var id = await OrderIdResolver
-            .TryResolveOrderGuidAsync(_ordersApi, orderId, cancellationToken)
+            .TryResolveOrderGuidAsync(_ordersApi, parameters.OrderId, cancellationToken)
             .ConfigureAwait(false);
         if (id is null)
         {
