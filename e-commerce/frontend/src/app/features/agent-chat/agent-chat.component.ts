@@ -104,6 +104,7 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
       next: (res) => this.onResponse(res),
       error: (err: unknown) => {
         this.sending = false;
+        this.approvalOpen = false;
         this.snack.open(getApiErrorMessage(err, 'Não foi possível enviar a mensagem.'), 'Fechar', {
           duration: 5000
         });
@@ -128,6 +129,9 @@ export class AgentChatComponent implements OnInit, AfterViewInit {
     ];
     this.persistMessages();
     this.sending = false;
+    if (!res.requiresApproval) {
+      this.approvalOpen = false;
+    }
     this.queueScrollBottom();
 
     if (res.requiresApproval) {

@@ -1,29 +1,29 @@
 using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
-using ECommerce.AgentAPI.Infrastructure.LLM.Google;
-using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
-using Microsoft.Extensions.DependencyInjection;
-
 namespace ECommerce.AgentAPI.Infrastructure.LLM;
 
 public sealed class LLMFactory : ILLMFactory
 {
-    private readonly IServiceProvider _sp;
     private readonly ILLMProviderResolver _providerResolver;
+    private readonly IReadOnlyDictionary<LLMProvider, ILLMService> _servicesByProvider;
 
-    public LLMFactory(IServiceProvider sp, ILLMProviderResolver providerResolver)
+    public LLMFactory(
+        IEnumerable<ILLMServiceProviderStrategy> strategies,
+        ILLMProviderResolver providerResolver)
     {
-        _sp = sp;
         _providerResolver = providerResolver;
+        _servicesByProvider = strategies.ToDictionary(s => s.Provider, s => s.Service);
     }
 
-    public ILLMService Create(LLMProvider provider) =>
-        provider switch
+    public ILLMService Create(LLMProvider provider)
+    {
+        if (_servicesByProvider.TryGetValue(provider, out var service))
         {
-            LLMProvider.OpenAI => _sp.GetRequiredService<OpenAILLMService>(),
-            LLMProvider.Google => _sp.GetRequiredService<GoogleLLMService>(),
-            _ => throw new NotSupportedException($"Provedor '{provider}' não suportado.")
-        };
+            return service;
+        }
+
+        throw new NotSupportedException($"Provedor '{provider}' não suportado.");
+    }
 
     public ILLMService CreateFromConfig() => Create(_providerResolver.Resolve());
 }

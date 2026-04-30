@@ -177,9 +177,7 @@ public sealed class ProcessUserMessageUseCase
                         sessionId,
                         command.CorrelationId,
                         "enrichment_error");
-                    await PersistAssistantReplyAsync(sessionId, enrichment.Error).ConfigureAwait(false);
-                    await PruneHistoryAsync(sessionId).ConfigureAwait(false);
-                    return Ok(BuildResponse(ChatEnvelope.TextOnly(enrichment.Error)));
+                    return await CancelPluginActionAsync(sessionId, enrichment.Error).ConfigureAwait(false);
                 }
 
                 call.Arguments = enrichment.Arguments;
@@ -244,8 +242,7 @@ public sealed class ProcessUserMessageUseCase
         if (!success)
         {
             var err = string.IsNullOrEmpty(envelopeError) ? DefaultToolErrorMessage : envelopeError;
-            await PersistAssistantReplyAsync(sessionId, err).ConfigureAwait(false);
-            return Ok(BuildResponse(ChatEnvelope.TextOnly(err)));
+            return await CancelPluginActionAsync(sessionId, err).ConfigureAwait(false);
         }
 
         var envelope = _catalog.BuildEnvelope(name, data);
@@ -319,8 +316,7 @@ public sealed class ProcessUserMessageUseCase
         if (!executionResult.Success)
         {
             var error = executionResult.Error ?? DefaultToolErrorMessage;
-            await PersistAssistantReplyAsync(sessionId, error).ConfigureAwait(false);
-            return Ok(BuildResponse(ChatEnvelope.TextOnly(error)));
+            return await CancelPluginActionAsync(sessionId, error).ConfigureAwait(false);
         }
 
         var envelope = _catalog.BuildEnvelope(call.Name ?? string.Empty, executionResult.Data);
@@ -357,15 +353,26 @@ public sealed class ProcessUserMessageUseCase
         if (!executionResult.Success)
         {
             var error = executionResult.Error ?? DefaultApprovedToolErrorMessage;
-            await PersistAssistantReplyAsync(sessionId, error).ConfigureAwait(false);
-            await PruneHistoryAsync(sessionId).ConfigureAwait(false);
-            return Ok(BuildResponse(ChatEnvelope.TextOnly(error)));
+            return await CancelPluginActionAsync(sessionId, error).ConfigureAwait(false);
         }
 
         var envelope = _catalog.BuildEnvelope(pending.ToolCall.Name ?? string.Empty, executionResult.Data);
         await PersistAssistantReplyAsync(sessionId, JoinIntroOutro(envelope)).ConfigureAwait(false);
         await PruneHistoryAsync(sessionId).ConfigureAwait(false);
         return Ok(BuildResponse(envelope));
+    }
+
+    /// <summary>
+    /// Falha de plugin ou da API (envelope <c>success: false</c>, exceção Refit, etc.): remove
+    /// qualquer <see cref="PendingApproval"/>, persiste a mensagem de erro, poda o histórico e
+    /// devolve resposta sem novo pedido de aprovação para o frontend.
+    /// </summary>
+    private async Task<ChatProcessResult> CancelPluginActionAsync(string sessionId, string userMessage)
+    {
+        await _approval.ClearPendingAsync(sessionId).ConfigureAwait(false);
+        await PersistAssistantReplyAsync(sessionId, userMessage).ConfigureAwait(false);
+        await PruneHistoryAsync(sessionId).ConfigureAwait(false);
+        return Ok(BuildResponse(ChatEnvelope.TextOnly(userMessage), requiresApproval: false));
     }
 
     private async Task<ChatProcessResult> CancelPendingAsync(string sessionId)

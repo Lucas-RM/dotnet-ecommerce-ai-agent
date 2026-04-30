@@ -1,22 +1,18 @@
 using ECommerce.AgentAPI.Domain.Enums;
-using ECommerce.AgentAPI.Infrastructure.LLM.Google;
-using ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
+
 namespace ECommerce.AgentAPI.Infrastructure.LLM;
 
 public sealed class ProviderKernelFactory : IKernelFactory
 {
     private readonly ILLMProviderResolver _providerResolver;
-    private readonly OpenAIKernelFactory _openAiKernelFactory;
-    private readonly GoogleKernelFactory _googleKernelFactory;
+    private readonly IReadOnlyDictionary<LLMProvider, IKernelFactory> _kernelsByProvider;
 
     public ProviderKernelFactory(
         ILLMProviderResolver providerResolver,
-        OpenAIKernelFactory openAiKernelFactory,
-        GoogleKernelFactory googleKernelFactory)
+        IEnumerable<IKernelFactoryProviderStrategy> strategies)
     {
         _providerResolver = providerResolver;
-        _openAiKernelFactory = openAiKernelFactory;
-        _googleKernelFactory = googleKernelFactory;
+        _kernelsByProvider = strategies.ToDictionary(s => s.Provider, s => s.KernelFactory);
     }
 
     public Microsoft.SemanticKernel.Kernel CreateKernel(
@@ -24,11 +20,11 @@ public sealed class ProviderKernelFactory : IKernelFactory
         IServiceProvider requestServices)
     {
         var provider = _providerResolver.Resolve();
-        return provider switch
+        if (_kernelsByProvider.TryGetValue(provider, out var kernelFactory))
         {
-            LLMProvider.OpenAI => _openAiKernelFactory.CreateKernel(sessionId, requestServices),
-            LLMProvider.Google => _googleKernelFactory.CreateKernel(sessionId, requestServices),
-            _ => throw new NotSupportedException($"Provedor '{provider}' não suportado.")
-        };
+            return kernelFactory.CreateKernel(sessionId, requestServices);
+        }
+
+        throw new NotSupportedException($"Provedor '{provider}' não suportado.");
     }
 }

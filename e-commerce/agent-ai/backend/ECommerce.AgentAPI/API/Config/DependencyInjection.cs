@@ -6,7 +6,6 @@ using ECommerce.AgentAPI.Application.Agents;
 using ECommerce.AgentAPI.Application.Options;
 using ECommerce.AgentAPI.Application.Tools;
 using ECommerce.AgentAPI.Application.UseCases;
-using ECommerce.AgentAPI.Domain.Enums;
 using ECommerce.AgentAPI.Domain.Interfaces;
 using ECommerce.AgentAPI.API.Middleware;
 using ECommerce.AgentAPI.ECommerceClient;
@@ -51,6 +50,8 @@ public static class AgentApiDependencyInjection
         services.AddSingleton<ToolApprovalService>();
         services.AddScoped<OpenAIKernelFactory>();
         services.AddScoped<GoogleKernelFactory>();
+        services.AddScoped<IKernelFactoryProviderStrategy, OpenAIKernelFactoryProviderStrategy>();
+        services.AddScoped<IKernelFactoryProviderStrategy, GoogleKernelFactoryProviderStrategy>();
         services.AddSingleton<ILLMProviderResolver, LLMProviderResolver>();
         services.AddScoped<IKernelFactory, ProviderKernelFactory>();
         services.AddScoped<IPluginFactory, PluginFactory>();
@@ -64,9 +65,12 @@ public static class AgentApiDependencyInjection
         // ── LLM Layer (Scoped — kernel/plugins respeitam dependências scoped por request) ──
         services.AddScoped<OpenAILLMService>();
         services.AddScoped<GoogleLLMService>();
+        services.AddScoped<ILLMServiceProviderStrategy, OpenAILLMServiceProviderStrategy>();
+        services.AddScoped<ILLMServiceProviderStrategy, GoogleLLMServiceProviderStrategy>();
+        services.AddSingleton<ILLMProviderConfigurationValidationStrategy, OpenAILLMProviderConfigurationValidationStrategy>();
+        services.AddSingleton<ILLMProviderConfigurationValidationStrategy, GoogleLLMProviderConfigurationValidationStrategy>();
+        services.AddHostedService<LLMProviderConfigurationValidationHostedService>();
         services.AddScoped<ILLMFactory, LLMFactory>();
-
-        ValidateLLMProviderConfiguration(configuration);
 
         // ── Aprovação (domínio) — adaptador sobre ToolApprovalService persistente em memória ──
         services.AddScoped<IToolApprovalService, ToolApprovalServiceAdapter>();
@@ -157,46 +161,6 @@ public static class AgentApiDependencyInjection
         services.AddAgentRuntimeHardening(configuration);
 
         return services;
-    }
-
-    /// <summary>
-    /// Valida a configuração do provedor LLM no arranque da aplicação. Garante que,
-    /// quando <c>LLM:Provider</c> aponta para um provedor que requer chave de API
-    /// (OpenAI, Google), a respetiva <c>ApiKey</c> está definida — falhando rápido
-    /// com uma <see cref="InvalidOperationException"/> descritiva.
-    /// </summary>
-    private static void ValidateLLMProviderConfiguration(IConfiguration configuration)
-    {
-        var providerRaw = configuration["LLM:Provider"] ?? "OpenAI";
-        if (!Enum.TryParse<LLMProvider>(providerRaw, ignoreCase: true, out var provider))
-        {
-            return;
-        }
-
-        switch (provider)
-        {
-            case LLMProvider.OpenAI:
-                {
-                    var apiKey = configuration["LLM:OpenAI:ApiKey"] ?? configuration["OpenAI:ApiKey"];
-                    if (string.IsNullOrWhiteSpace(apiKey))
-                    {
-                        throw new InvalidOperationException(
-                            "Configuração ausente: LLM:OpenAI:ApiKey (ou legado OpenAI:ApiKey) é obrigatória quando LLM:Provider=OpenAI.");
-                    }
-                    break;
-                }
-
-            case LLMProvider.Google:
-                {
-                    var apiKey = configuration["LLM:Google:ApiKey"];
-                    if (string.IsNullOrWhiteSpace(apiKey))
-                    {
-                        throw new InvalidOperationException(
-                            "Configuração ausente: LLM:Google:ApiKey é obrigatória quando LLM:Provider=Google.");
-                    }
-                    break;
-                }
-        }
     }
 
     private static Action<JwtBearerOptions> ConfigureJwtBearerOptions(IConfiguration configuration) => options =>

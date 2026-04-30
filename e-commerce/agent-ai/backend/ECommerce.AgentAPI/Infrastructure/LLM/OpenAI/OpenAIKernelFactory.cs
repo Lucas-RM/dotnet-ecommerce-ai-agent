@@ -1,5 +1,6 @@
 using ECommerce.AgentAPI.Domain.ValueObjects;
 using ECommerce.AgentAPI.Infrastructure.Approval;
+using ECommerce.AgentAPI.Infrastructure.LLM;
 using ECommerce.AgentAPI.Infrastructure.LLM.Plugins;
 using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
@@ -11,58 +12,25 @@ namespace ECommerce.AgentAPI.Infrastructure.LLM.OpenAI;
 /// Monta o <see cref="Microsoft.SemanticKernel.Kernel"/> com OpenAI (api.openai.com) e os plugins de e-commerce.
 /// O nome alinha com a fábrica do Google (mesmo padrão por fornecedor).
 /// </summary>
-public sealed class OpenAIKernelFactory : IKernelFactory
+public sealed class OpenAIKernelFactory : BaseProviderKernelFactory
 {
-    private readonly IConfiguration _configuration;
-    private readonly ToolApprovalService _toolApproval;
-    private readonly IPluginFactory _pluginFactory;
-
     public OpenAIKernelFactory(
         IConfiguration configuration,
         ToolApprovalService toolApproval,
         IPluginFactory pluginFactory)
+        : base(configuration, toolApproval, pluginFactory)
     {
-        _configuration = configuration;
-        _toolApproval = toolApproval;
-        _pluginFactory = pluginFactory;
     }
 
-    public Microsoft.SemanticKernel.Kernel CreateKernel(
-        string sessionId,
-        IServiceProvider requestServices)
+    protected override void ConfigureProviderChatCompletion(IKernelBuilder builder)
     {
-        if (!Guid.TryParse(sessionId, out var parsedSessionId))
-        {
-            throw new ArgumentException("SessionId inválido.", nameof(sessionId));
-        }
-
-        return CreateKernel(parsedSessionId, requestServices);
-    }
-
-    public Microsoft.SemanticKernel.Kernel CreateKernel(
-        Guid sessionId,
-        IServiceProvider requestServices)
-    {
-        ArgumentNullException.ThrowIfNull(requestServices);
-
         // Secção 6 (ecommerce-agent-evolution): LLM:OpenAI — mantém fallback a OpenAI:* (legado)
-        var model = _configuration["LLM:OpenAI:Model"] ?? _configuration["OpenAI:Model"]
+        var model = Configuration["LLM:OpenAI:Model"] ?? Configuration["OpenAI:Model"]
             ?? throw new InvalidOperationException("Configuração ausente: LLM:OpenAI:Model (ou legado OpenAI:Model).");
-        var apiKey = _configuration["LLM:OpenAI:ApiKey"] ?? _configuration["OpenAI:ApiKey"]
+        var apiKey = Configuration["LLM:OpenAI:ApiKey"] ?? Configuration["OpenAI:ApiKey"]
             ?? throw new InvalidOperationException("Configuração ausente: LLM:OpenAI:ApiKey (ou legado OpenAI:ApiKey).");
 
-        var builder = Microsoft.SemanticKernel.Kernel.CreateBuilder();
         builder.AddOpenAIChatCompletion(modelId: model, apiKey: apiKey);
-
-        builder.Services.AddSingleton(_toolApproval);
-        builder.Services.AddSingleton<IFunctionInvocationFilter, ApprovalFilter>();
-
-        builder.AddRegisteredToolPlugins(_pluginFactory, requestServices);
-
-        var kernel = builder.Build();
-        kernel.Data[AgentKernelDataKeys.SessionId] = sessionId;
-        kernel.Data[AgentKernelDataKeys.AutomaticToolInvocations] = new List<RecordedToolInvocation>();
-        return kernel;
     }
 
     public OpenAIPromptExecutionSettings CreatePromptExecutionSettings() =>
